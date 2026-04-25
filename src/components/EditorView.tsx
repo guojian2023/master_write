@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Sparkles, 
   CheckCircle, 
   AlertCircle, 
   Loader2,
-  Maximize2,
-  Minimize2,
   Trash2,
   Eye,
   Type,
-  RefreshCw
+  RefreshCw,
+  MessageSquareDiff,
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Thesis, Section } from '../types';
@@ -27,14 +27,16 @@ export default function EditorView({ thesis, onUpdate, initialSectionId }: Edito
   const [content, setContent] = useState('');
   const [isExpanding, setIsExpanding] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
+  const [revisionComment, setRevisionComment] = useState('');
 
   // Sync content with state when section changes
   useEffect(() => {
     if (activeSectionId) {
       const section = findSection(activeSectionId);
       setContent(section?.content || '');
+      setRevisionComment('');
     }
-  }, [activeSectionId]);
+  }, [activeSectionId, thesis.chapters]);
 
   const findSection = (id: string): Section | undefined => {
     for (const chapter of thesis.chapters) {
@@ -62,21 +64,20 @@ export default function EditorView({ thesis, onUpdate, initialSectionId }: Edito
     onUpdate(updatedThesis);
   };
 
+  const allSections: Section[] = [];
+  thesis.chapters.forEach(c => allSections.push(...c.sections));
+  const currentIndex = activeSectionId ? allSections.findIndex(s => s.id === activeSectionId) : -1;
+  const prevSection = currentIndex > 0 ? allSections[currentIndex - 1] : null;
+  const nextSection = currentIndex !== -1 && currentIndex < allSections.length - 1 ? allSections[currentIndex + 1] : null;
+
+  const currentSection = activeSectionId ? findSection(activeSectionId) : null;
+
   const handleAIExpand = async () => {
     if (isExpanding || !activeSectionId) return;
     setIsExpanding(true);
     try {
-      const section = findSection(activeSectionId);
-      
-      // Collect full context for logic consistency
-      const allSections: Section[] = [];
-      thesis.chapters.forEach(c => allSections.push(...c.sections));
-      const currentIndex = allSections.findIndex(s => s.id === activeSectionId);
-      const prevSection = currentIndex > 0 ? allSections[currentIndex - 1] : null;
-      const nextSection = currentIndex < allSections.length - 1 ? allSections[currentIndex + 1] : null;
-
-      const structure = thesis.chapters.map(c => 
-        `- ${c.title}\n  ${c.sections.map(s => `  * ${s.title}`).join('\n')}`
+      const structure = thesis.chapters.map((c, i) => 
+        `- 第${i+1}章 ${c.title}\n  ${c.sections.map((s, j) => `  * ${i+1}.${j+1} ${s.title}`).join('\n')}`
       ).join('\n');
 
       const prompt = `
@@ -88,32 +89,52 @@ export default function EditorView({ thesis, onUpdate, initialSectionId }: Edito
 ${structure}
 
 [上下文关联]
-${prevSection ? `前一章节（${prevSection.title}）摘要：${prevSection.content.substring(0, 500)}...` : '（本章为开头章节）'}
-${nextSection ? `后一章节（${nextSection.title}）预告：系统将确保本段与下一章逻辑闭环。` : '（本章为结尾章节）'}
+${prevSection ? `前一小节（${prevSection.title}）摘要或内容：\n${prevSection.content ? prevSection.content.substring(0, 800) : '(尚无内容)'}...` : '（本小节为首节）'}
+${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保本段与下一节逻辑闭环。` : '（本小节为末节）'}
 
 [当前任务]
-正在撰写章节：${section?.title}
+正在撰写章节：${currentSection?.title}
+目标字数：约 ${currentSection?.targetWordCount || 1500} 字。
 章节已有内容：
-${content || '(该章节尚无内容，请开始生成初稿)'}
+${content || '(该章节尚无内容，请严格按照学术规范结合全局上下文自动生成完整的初稿正文)'}
 
 任务：
-请基于以上全文逻辑架构，为当前章节进行深度学术扩写或生成。
+请基于以上全文逻辑架构，为当前章节进行深度学术扩写或一键生成完整初稿内容。
 要求：
-1. 【强逻辑性】：必须确保章节内容与全局大纲及前一章节衔接严密，体现管理学逻辑的连贯性。
-2. 【专业深度】：深度融入管理学、工程学、运筹学或相关行业理论。
-3. 【学术规范】：使用严谨的学术书面语，禁止使用口语、感叹号或第一人称。
-4. 【字数要求】：扩充或生成不少于800字的高质量文本。
+1. 【强逻辑性】：必须确保章节内容与全局大纲及前后章节衔接严密，体现管理学逻辑的连贯性。
+2. 【专业深度】：深度融入管理学、工程学、运筹学或相关行业理论。如果是案例分析或方案设计，必须充实具体。
+3. 【学术规范】：使用严谨的学术书面语，客观陈述，禁止使用口语、感叹号或第一人称“我”、“我们”。
+4. 【字数要求】：扩充或生成符合要求的高质量文本。
 
 直接返回生成的学术正文，不要包含任何引导性话语。
 `;
-      const expanded = await askAI(prompt, "你是一个极具逻辑性的MEM硕士论文导师。你的目标是确保每一章节都在全文逻辑链条中占有精准地位，并提供极具深度和专业性的学术文字。");
+      const expanded = await askAI(prompt, SYSTEM_PROMPTS.CONTENT_EXPANDER);
       if (!expanded) throw new Error("AI 未返回任何内容");
-      handleContentChange(content ? content + "\n\n" + expanded : expanded);
+      if (!content) {
+        handleContentChange(expanded);
+      } else {
+        handleContentChange(content + "\n\n" + expanded);
+      }
     } catch (e: any) {
       console.error("AI Expand error:", e);
-      alert("AI 扩充失败: " + (e.message || "未知错误"));
+      alert("AI 写作失败: " + (e.message || "未知错误"));
     } finally {
       setIsExpanding(false);
+    }
+  };
+
+  const handleAIRevise = async () => {
+    if (!content || isRewriting || !revisionComment.trim()) return;
+    setIsRewriting(true);
+    try {
+      const prompt = `现有正文内容：\n${content}\n\n针对以上内容的修改意见：\n${revisionComment}\n\n请严格基于上述意见对正文进行重新组织和学术重写。`;
+      const rewritten = await askAI(prompt, SYSTEM_PROMPTS.CONTENT_REVISER);
+      handleContentChange(rewritten);
+      setRevisionComment('');
+    } catch (e) {
+      alert("AI 修改失败");
+    } finally {
+      setIsRewriting(false);
     }
   };
 
@@ -130,7 +151,24 @@ ${content || '(该章节尚无内容，请开始生成初稿)'}
     }
   };
 
-  const currentSection = activeSectionId ? findSection(activeSectionId) : null;
+  const findChapterIndex = (id: string): number => {
+    for (let i = 0; i < thesis.chapters.length; i++) {
+        if (thesis.chapters[i].sections.find(s => s.id === id)) return i;
+    }
+    return -1;
+  };
+
+  const cIdx = activeSectionId ? findChapterIndex(activeSectionId) : -1;
+  const chapterRequirement = cIdx !== -1 ? [
+    "【绪论】引出研究背景、国内外研究现状、研究目的、研究内容等。控制篇幅(通常20%)，简明扼要。",
+    "【理论基础与文献综述】侧重阐述研究问题相关的理论框架与模型，通过文献综述论证研究必要性与创新点。",
+    "【现状与问题分析】基于特定组织的实际数据、通过事实描述当前状况，挖掘表象背后的核心问题与深层诱因。",
+    "【解决方案设计】针对前文分析的核心问题，借助方法论或理论给出解决策略、过程、计划和配套措施。",
+    "【方案实施与效果评价】方案落地执行的过程，并通过前后数据对比或可行性验证来考核方案的实施效果。",
+    "【结论与展望】总结全文的工作与成果，指出理论与实践贡献，同时客观指出研究的不足及未来的研究方向。"
+  ][Math.min(cIdx, 5)] : "";
+
+  const [expandedPanel, setExpandedPanel] = useState<'guidance' | 'context' | 'revise'>('revise');
 
   return (
     <div className="flex h-full gap-6 pb-6">
@@ -181,7 +219,7 @@ ${content || '(该章节尚无内容，请开始生成初稿)'}
                   <div className="flex items-center gap-3 mt-1">
                     <span className="label-caps text-blue-400 opacity-60">字数: {content.length}</span>
                     <div className="w-1 h-1 bg-slate-700 rounded-full" />
-                    <span className="label-caps opacity-30">标准建议: ~1500</span>
+                    <span className="label-caps opacity-30">建议字数: {currentSection?.targetWordCount ? `~${currentSection.targetWordCount}` : '~1500'}</span>
                   </div>
                 </div>
               </div>
@@ -201,7 +239,7 @@ ${content || '(该章节尚无内容，请开始生成初稿)'}
                   className="px-5 py-2 rounded-xl bg-blue-600 text-[10px] font-black uppercase tracking-widest text-white hover:bg-blue-500 flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all active:scale-95"
                 >
                   {isExpanding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                  智能续写
+                  {content ? "AI 扩充" : "一键写作"}
                 </button>
               </div>
             </div>
@@ -216,42 +254,130 @@ ${content || '(该章节尚无内容，请开始生成初稿)'}
         )}
       </div>
 
-      {/* Floating Audit Indicator */}
+      {/* Floating Context & Revision Indicator */}
       <AnimatePresence>
         {activeSectionId && (
           <motion.div 
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="w-80 bg-[#1E293B] border border-slate-700 rounded-2xl p-8 flex flex-col gap-8 shadow-2xl"
+            className="w-80 bg-[#1E293B] border border-slate-700 rounded-2xl flex flex-col shadow-2xl relative overflow-hidden"
           >
-            <div>
-              <div className="flex items-center gap-2 mb-6">
-                <Sparkles className="w-4 h-4 text-blue-400" />
-                <h4 className="label-caps text-blue-400">AI 写作助手</h4>
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 flex flex-col gap-4">
+              
+              {/* Guidance requirement */}
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={() => setExpandedPanel(p => p === 'guidance' ? '' : 'guidance')}
+                  className="flex items-center justify-between p-3 bg-slate-900/80 hover:bg-slate-800 rounded-xl transition-colors border border-slate-800"
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-emerald-400" />
+                    <h4 className="text-xs font-bold text-emerald-400">章节撰写要求</h4>
+                  </div>
+                </button>
+                <AnimatePresence>
+                  {expandedPanel === 'guidance' && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl mt-1">
+                        <p className="text-[11px] text-emerald-400/80 leading-relaxed font-medium">
+                          {chapterRequirement || "常规章节，请保持逻辑严密，论点清晰，图表数据支撑。"}
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
-              <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-3">
-                <h5 className="label-caps text-emerald-400">写作要点 (Dr. Huang)</h5>
-                <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
-                  本章节应着重于展示您的管理学理论应用深度。避免单纯的“现状描述”，尝试用理论解构问题。
-                </p>
+              {/* Context */}
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={() => setExpandedPanel(p => p === 'context' ? '' : 'context')}
+                  className="flex items-center justify-between p-3 bg-slate-900/80 hover:bg-slate-800 rounded-xl transition-colors border border-slate-800"
+                >
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-blue-400" />
+                    <h4 className="text-xs font-bold text-blue-400">上下文参考</h4>
+                  </div>
+                </button>
+                <AnimatePresence>
+                  {expandedPanel === 'context' && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden space-y-3 mt-1"
+                    >
+                      {prevSection ? (
+                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                          <span className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">⬆ 上一节: {prevSection.title}</span>
+                          <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
+                            {prevSection.content || '（暂无正文）'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-center">
+                          <span className="text-[10px] font-bold text-slate-500 block">本节是整篇论文的开篇</span>
+                        </div>
+                      )}
+                      
+                      {nextSection ? (
+                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                          <span className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">⬇ 下一节: {nextSection.title}</span>
+                        </div>
+                      ) : (
+                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-center">
+                          <span className="text-[10px] font-bold text-slate-500 block">本节是整篇论文的结尾</span>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            </div>
 
-            <div className="space-y-4">
-              <h5 className="label-caps opacity-40">实时逻辑检测</h5>
-              <div className="flex items-start gap-4 p-5 rounded-2xl bg-amber-500/5 border border-amber-500/20">
-                <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-                <p className="text-[10px] text-amber-200/60 leading-relaxed font-bold">
-                  检测到文本稍显“口语化”。建议使用“基于...”或“旨在...”等学术连接词进行改写。
-                </p>
+              {/* Revise */}
+              <div className="flex flex-col gap-2 flex-1">
+                <button 
+                  onClick={() => setExpandedPanel(p => p === 'revise' ? '' : 'revise')}
+                  className="flex items-center justify-between p-3 bg-slate-900/80 hover:bg-slate-800 rounded-xl transition-colors border border-slate-800"
+                >
+                  <div className="flex items-center gap-2">
+                    <MessageSquareDiff className="w-4 h-4 text-amber-500" />
+                    <h4 className="text-xs font-bold text-amber-500">定向修改意见</h4>
+                  </div>
+                </button>
+                <AnimatePresence>
+                  {expandedPanel === 'revise' && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden flex flex-col gap-3 h-full mt-1"
+                    >
+                      <textarea
+                        className="flex-1 min-h-[160px] w-full bg-slate-900 border border-slate-700/50 rounded-xl p-3 text-xs text-slate-300 outline-none resize-none placeholder:text-slate-600 focus:border-amber-500/50 focus:bg-slate-900/80 transition-colors"
+                        placeholder="例如：请增加XXX理论的引用；这里缺少解决由于资金不足导致的问题的具体对策；语言太过口语化请重新写..."
+                        value={revisionComment}
+                        onChange={e => setRevisionComment(e.target.value)}
+                      />
+                      
+                      <button
+                        onClick={handleAIRevise}
+                        disabled={isRewriting || !revisionComment.trim()}
+                        className="w-full py-3 rounded-xl bg-amber-600/20 text-amber-500 border border-amber-500/30 text-xs font-black uppercase tracking-widest hover:bg-amber-500 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-auto"
+                      >
+                        {isRewriting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        根据意见重写本节
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            </div>
 
-            <div className="mt-auto px-4 py-3 bg-blue-600/10 border border-blue-500/20 rounded-xl">
-              <p className="text-[10px] text-blue-400 font-black text-center uppercase tracking-widest">
-                按 Tab 键接受 AI 建议
-              </p>
             </div>
           </motion.div>
         )}

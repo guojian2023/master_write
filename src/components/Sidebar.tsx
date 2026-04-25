@@ -6,7 +6,8 @@ import {
   FileText, 
   ShieldCheck, 
   Target,
-  Library
+  Library,
+  Settings
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -14,9 +15,10 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: any) => void;
   hasProject: boolean;
+  onOpenSettings: () => void;
 }
 
-export default function Sidebar({ activeTab, setActiveTab, hasProject }: SidebarProps) {
+export default function Sidebar({ activeTab, setActiveTab, hasProject, onOpenSettings }: SidebarProps) {
   const menuItems = [
     { id: 'project', label: '项目启动', icon: Target },
     { id: 'outline', label: '大纲管理', icon: Layout, disabled: !hasProject },
@@ -60,10 +62,16 @@ export default function Sidebar({ activeTab, setActiveTab, hasProject }: Sidebar
       </nav>
 
       <div className="p-6 mt-auto border-t border-slate-800/50">
-        <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
-          <p className="label-caps mb-2 text-slate-500">版本</p>
-          <p className="text-[10px] font-mono text-slate-400">v2.4.0-stable</p>
-        </div>
+        <button 
+          onClick={onOpenSettings}
+          className="w-full flex items-center gap-3 px-4 py-3 bg-slate-800/50 hover:bg-slate-800 rounded-xl border border-slate-700/50 transition-colors text-slate-400 hover:text-slate-200"
+        >
+          <Settings className="w-5 h-5 text-slate-500" />
+          <div className="flex flex-col items-start leading-tight">
+            <span className="text-sm font-medium text-slate-300">模型与 API 设置</span>
+            <span className="text-[10px] text-slate-500">v2.4.0-stable</span>
+          </div>
+        </button>
       </div>
     </aside>
   );

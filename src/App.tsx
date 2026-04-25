@@ -24,12 +24,14 @@ import OutlineView from './components/OutlineView';
 import EditorView from './components/EditorView';
 import AuditView from './components/AuditView';
 import LiteratureManager from './components/LiteratureManager';
+import ApiSettingsModal from './components/ApiSettingsModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'project' | 'outline' | 'editor' | 'literature' | 'audit'>('project');
   const [thesis, setThesis] = useState<Thesis | null>(null);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Initialize from server or local storage
   useEffect(() => {
@@ -151,7 +153,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-[#0A0F1E] text-slate-200 font-sans">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} hasProject={!!thesis} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} hasProject={!!thesis} onOpenSettings={() => setShowSettings(true)} />
       
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Header activeTab={activeTab} thesisTopic={thesis?.topic} />
@@ -229,6 +231,8 @@ export default function App() {
           </AnimatePresence>
         </div>
       </main>
+
+      <ApiSettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   );
 }

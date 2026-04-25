@@ -47,13 +47,9 @@ export default function ProjectStartup({ onStart, isLoading, existingThesis, onL
     setIsTestingApi(true);
     setApiTestResult(null);
     try {
-      const response = await fetch('/api/test-api');
-      const data = await response.json();
-      if (response.ok) {
-        setApiTestResult({ status: 'success', message: data.message });
-      } else {
-        setApiTestResult({ status: 'error', message: data.error || data.details || '测试失败' });
-      }
+      const { testAPI } = await import('../services/aiService');
+      const message = await testAPI();
+      setApiTestResult({ status: 'success', message });
     } catch (e: any) {
       setApiTestResult({ status: 'error', message: e.message || '网络或服务器错误' });
     } finally {
