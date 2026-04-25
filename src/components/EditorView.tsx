@@ -28,6 +28,7 @@ export default function EditorView({ thesis, onUpdate, initialSectionId }: Edito
   const [isExpanding, setIsExpanding] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
   const [revisionComment, setRevisionComment] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Sync content with state when section changes
   useEffect(() => {
@@ -75,6 +76,7 @@ export default function EditorView({ thesis, onUpdate, initialSectionId }: Edito
   const handleAIExpand = async () => {
     if (isExpanding || !activeSectionId) return;
     setIsExpanding(true);
+    setErrorMsg(null);
     try {
       const structure = thesis.chapters.map((c, i) => 
         `- 第${i+1}章 ${c.title}\n  ${c.sections.map((s, j) => `  * ${i+1}.${j+1} ${s.title}`).join('\n')}`
@@ -104,9 +106,9 @@ ${content || '(该章节尚无内容，请严格按照学术规范结合全局�
 1. 【强逻辑性】：必须确保章节内容与全局大纲及前后章节衔接严密，体现管理学逻辑的连贯性。
 2. 【专业深度】：深度融入管理学、工程学、运筹学或相关行业理论。如果是案例分析或方案设计，必须充实具体。
 3. 【学术规范】：使用严谨的学术书面语，客观陈述，禁止使用口语、感叹号或第一人称“我”、“我们”。
-4. 【字数要求】：扩充或生成符合要求的高质量文本。
+4. 【精确字数控制】：你必须严格按照【目标字数：约 ${currentSection?.targetWordCount || 1500} 字】为您生成的内容设定篇幅，避免生成内容与预期字数差异过大！如果字数较多，应合理增加小标题展开论述；如果字数较少，则提炼核心观点。
 
-直接返回生成的学术正文，不要包含任何引导性话语。
+直接返回生成的学术正文，不要包含任何引导性话语或多余解释。
 `;
       const expanded = await askAI(prompt, SYSTEM_PROMPTS.CONTENT_EXPANDER);
       if (!expanded) throw new Error("AI 未返回任何内容");
@@ -117,7 +119,7 @@ ${content || '(该章节尚无内容，请严格按照学术规范结合全局�
       }
     } catch (e: any) {
       console.error("AI Expand error:", e);
-      alert("AI 写作失败: " + (e.message || "未知错误"));
+      setErrorMsg(`AI 写作报错: ${e.message || String(e)}`);
     } finally {
       setIsExpanding(false);
     }
@@ -126,13 +128,14 @@ ${content || '(该章节尚无内容，请严格按照学术规范结合全局�
   const handleAIRevise = async () => {
     if (!content || isRewriting || !revisionComment.trim()) return;
     setIsRewriting(true);
+    setErrorMsg(null);
     try {
       const prompt = `现有正文内容：\n${content}\n\n针对以上内容的修改意见：\n${revisionComment}\n\n请严格基于上述意见对正文进行重新组织和学术重写。`;
       const rewritten = await askAI(prompt, SYSTEM_PROMPTS.CONTENT_REVISER);
       handleContentChange(rewritten);
       setRevisionComment('');
-    } catch (e) {
-      alert("AI 修改失败");
+    } catch (e: any) {
+      setErrorMsg(`AI 修改报错: ${e.message || String(e)}`);
     } finally {
       setIsRewriting(false);
     }
@@ -141,11 +144,12 @@ ${content || '(该章节尚无内容，请严格按照学术规范结合全局�
   const handleAIRewrite = async () => {
     if (!content || isRewriting) return;
     setIsRewriting(true);
+    setErrorMsg(null);
     try {
       const rewritten = await askAI(`请将以下文字转化为专业的学术表述，去除口语化和第一人称：\n${content}`, SYSTEM_PROMPTS.ACADEMIC_REWRITER);
       handleContentChange(rewritten);
-    } catch (e) {
-      alert("AI 润色失败");
+    } catch (e: any) {
+      setErrorMsg(`AI 润色报错: ${e.message || String(e)}`);
     } finally {
       setIsRewriting(false);
     }
@@ -209,6 +213,16 @@ ${content || '(该章节尚无内容，请严格按照学术规范结合全局�
           </div>
         ) : (
           <>
+            {errorMsg && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
+                <div className="bg-rose-500/10 border border-rose-500/50 text-rose-500 px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 backdrop-blur-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-xs font-bold">{errorMsg}</span>
+                  <button onClick={() => setErrorMsg(null)} className="ml-2 hover:text-white transition-colors">&times;</button>
+                </div>
+              </div>
+            )}
+            
             <div className="px-8 py-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">

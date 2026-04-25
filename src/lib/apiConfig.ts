@@ -9,7 +9,7 @@ export const DEFAULT_CONFIG: ApiConfig = {
   platform: 'gemini',
   apiKey: '',
   baseUrl: '',
-  model: 'gemini-3-flash-preview',
+  model: 'gemini-2.5-flash',
 };
 
 const STORAGE_KEY = 'mem_thesis_api_config';

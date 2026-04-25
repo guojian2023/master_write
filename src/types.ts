@@ -36,12 +36,16 @@ export interface Thesis {
   problems: string[]; // Identified problems
   solutions: string[]; // Proposed solutions
   citations: Citation[];
+  targetTotalWords?: number;
   updatedAt: string;
 }
 
 export interface LogicIssue {
-  type: 'inconsistency' | 'vagueness' | 'gap';
+  type: 'inconsistency' | 'vagueness' | 'gap' | 'methodology';
   severity: 'low' | 'medium' | 'high';
   message: string;
   suggestion: string;
+  sectionId?: string;
+  chapterTitle?: string;
+  sectionTitle?: string;
 }

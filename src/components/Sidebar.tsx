@@ -20,7 +20,7 @@ interface SidebarProps {
 
 export default function Sidebar({ activeTab, setActiveTab, hasProject, onOpenSettings }: SidebarProps) {
   const menuItems = [
-    { id: 'project', label: '项目启动', icon: Target },
+    { id: 'project', label: '项目列表', icon: Target },
     { id: 'outline', label: '大纲管理', icon: Layout, disabled: !hasProject },
     { id: 'editor', label: '正文撰写', icon: FileText, disabled: !hasProject },
     { id: 'literature', label: '文献管理', icon: Library, disabled: !hasProject },

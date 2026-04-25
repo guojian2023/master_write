@@ -28,39 +28,58 @@ import ApiSettingsModal from './components/ApiSettingsModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'project' | 'outline' | 'editor' | 'literature' | 'audit'>('project');
-  const [thesis, setThesis] = useState<Thesis | null>(null);
+  const [theses, setTheses] = useState<Thesis[]>([]);
+  const [activeThesisId, setActiveThesisId] = useState<string | null>(null);
+  
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
+  const thesis = theses.find(t => t.id === activeThesisId) || null;
+
   // Initialize from server or local storage
   useEffect(() => {
     const init = async () => {
+      let remoteLoaded = false;
       try {
-        // Try server first
-        const resp = await fetch('/api/load-thesis');
+        const resp = await fetch('/api/load-theses');
         if (resp.ok) {
           const remote = await resp.json();
-          if (remote && Array.isArray(remote.chapters)) {
-            setThesis(remote);
-            return;
-          }
-        }
-        
-        // Fallback to local storage
-        const saved = localStorage.getItem('mem-thesis-master');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed && Array.isArray(parsed.chapters)) {
-            // Ensure citations array exists
-            if (!parsed.citations) {
-              parsed.citations = [];
-            }
-            setThesis(parsed);
+          if (Array.isArray(remote) && remote.length > 0) {
+            setTheses(remote);
+            setActiveThesisId(remote[0].id);
+            remoteLoaded = true;
           }
         }
       } catch (e) {
-        console.error("Initialization failed", e);
+        console.warn("Failed to load from server, falling back to local storage", e);
+      }
+      
+      if (!remoteLoaded) {
+        try {
+          const saved = localStorage.getItem('mem-theses-list');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setTheses(parsed);
+              setActiveThesisId(parsed[0].id);
+            }
+          } else {
+             // Migration from old single thesis format
+             const oldSaved = localStorage.getItem('mem-thesis-master');
+             if (oldSaved) {
+               const parsed = JSON.parse(oldSaved);
+               if (parsed && Array.isArray(parsed.chapters)) {
+                 if (!parsed.citations) parsed.citations = [];
+                 if (!parsed.id) parsed.id = crypto.randomUUID();
+                 setTheses([parsed]);
+                 setActiveThesisId(parsed.id);
+               }
+             }
+          }
+        } catch (e) {
+          console.error("Initialization from local storage failed", e);
+        }
       }
     };
     init();
@@ -68,24 +87,31 @@ export default function App() {
 
   // Save to local storage and server
   useEffect(() => {
-    if (thesis) {
-      localStorage.setItem('mem-thesis-master', JSON.stringify(thesis));
+    if (theses.length > 0) {
+      localStorage.setItem('mem-theses-list', JSON.stringify(theses));
       
-      // debounced server save
       const timer = setTimeout(async () => {
         try {
-          await fetch('/api/save-thesis', {
+          await fetch('/api/save-theses', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ thesis })
+            body: JSON.stringify({ theses })
           });
         } catch (e) {
           console.error("Server save failed", e);
         }
       }, 2000);
       return () => clearTimeout(timer);
+    } else {
+       localStorage.removeItem('mem-theses-list');
+       // clear from server as well
+       fetch('/api/save-theses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theses: [] })
+      }).catch(console.error);
     }
-  }, [thesis]);
+  }, [theses]);
 
   // Default tab based on thesis existence
   useEffect(() => {
@@ -137,7 +163,8 @@ export default function App() {
         updatedAt: new Date().toISOString()
       };
 
-      setThesis(newThesis);
+      setTheses(prev => [newThesis, ...prev]);
+      setActiveThesisId(newThesis.id);
       setActiveTab('outline');
     } catch (error) {
       console.error("Failed to start project:", error);
@@ -148,7 +175,7 @@ export default function App() {
   };
 
   const updateThesis = (updated: Thesis) => {
-    setThesis({ ...updated, updatedAt: new Date().toISOString() });
+    setTheses(prev => prev.map(t => t.id === updated.id ? { ...updated, updatedAt: new Date().toISOString() } : t));
   };
 
   return (
@@ -156,7 +183,7 @@ export default function App() {
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} hasProject={!!thesis} onOpenSettings={() => setShowSettings(true)} />
       
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <Header activeTab={activeTab} thesisTopic={thesis?.topic} />
+        <Header activeTab={activeTab} thesisTopic={thesis?.topic} thesis={thesis} />
         
         <div className="flex-1 overflow-y-auto p-6 md:p-8">
           <AnimatePresence mode="wait">
@@ -170,8 +197,18 @@ export default function App() {
                 <ProjectStartup 
                   onStart={handleStartProject} 
                   isLoading={isInitializing} 
-                  existingThesis={thesis}
-                  onLoadExisting={() => setActiveTab('outline')}
+                  theses={theses}
+                  onLoadExisting={(id) => {
+                    setActiveThesisId(id);
+                    setActiveTab('outline');
+                  }}
+                  onDeleteThesis={(id) => {
+                    const newTheses = theses.filter(t => t.id !== id);
+                    setTheses(newTheses);
+                    if (activeThesisId === id) {
+                      setActiveThesisId(newTheses.length > 0 ? newTheses[0].id : null);
+                    }
+                  }}
                 />
               </motion.div>
             )}
@@ -225,7 +262,7 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <AuditView thesis={thesis} />
+                <AuditView thesis={thesis} onUpdate={updateThesis} />
               </motion.div>
             )}
           </AnimatePresence>

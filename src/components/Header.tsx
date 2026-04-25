@@ -1,23 +1,35 @@
 import React from 'react';
 import { 
-  Bell, 
-  HelpCircle, 
   User,
-  History
 } from 'lucide-react';
+import { Thesis } from '../types';
 
 interface HeaderProps {
   activeTab: string;
   thesisTopic?: string;
+  thesis?: Thesis | null;
 }
 
-export default function Header({ activeTab, thesisTopic }: HeaderProps) {
+export default function Header({ activeTab, thesisTopic, thesis }: HeaderProps) {
   const titles: Record<string, string> = {
-    project: '项目启动',
+    project: '项目列表',
     outline: '大纲管理',
     editor: '正文撰写',
+    literature: '文献管理',
     audit: '审计中心',
   };
+
+  // Calculate completion percentage
+  let progress = 0;
+  if (thesis && thesis.targetTotalWords) {
+    const targetWords = thesis.targetTotalWords;
+    const currentWords = thesis.chapters.reduce((acc, c) => acc + c.sections.reduce((sAcc, s) => sAcc + (s.content?.length || 0), 0), 0);
+    progress = Math.min(100, Math.round((currentWords / targetWords) * 100));
+  } else if (thesis) {
+    // legacy or no target words fallback
+    const currentWords = thesis.chapters.reduce((acc, c) => acc + c.sections.reduce((sAcc, s) => sAcc + (s.content?.length || 0), 0), 0);
+    progress = Math.min(100, Math.round((currentWords / 30000) * 100));
+  }
 
   return (
     <header className="h-20 bg-[#0F172A] border-b border-slate-800 flex items-center justify-between px-8 z-10 shrink-0">
@@ -34,27 +46,19 @@ export default function Header({ activeTab, thesisTopic }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-6">
-        <div className="hidden md:flex items-center gap-4 mr-4">
-          <div className="text-right">
-            <p className="label-caps mb-1 opacity-50">写作完成率</p>
-            <div className="flex items-center gap-2">
-              <div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden">
-                <div className="w-3/4 h-full bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+        {thesis && (
+          <div className="hidden md:flex items-center gap-4 mr-4">
+            <div className="text-right">
+              <p className="label-caps mb-1 opacity-50">写作完成率</p>
+              <div className="flex items-center gap-2">
+                <div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" style={{ width: `${progress}%` }}></div>
+                </div>
+                <span className="text-[10px] font-mono text-slate-400">{progress}%</span>
               </div>
-              <span className="text-[10px] font-mono text-slate-400">75%</span>
             </div>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button className="p-2.5 text-slate-500 hover:text-white hover:bg-slate-800/50 rounded-xl transition-all">
-            <History className="w-5 h-5" />
-          </button>
-          <button className="p-2.5 text-slate-500 hover:text-white hover:bg-slate-800/50 rounded-xl transition-all relative">
-            <Bell className="w-5 h-5" />
-            <div className="absolute top-2.5 right-2.5 w-2 h-2 bg-blue-500 rounded-full border-2 border-[#0F172A]"></div>
-          </button>
-        </div>
+        )}
 
         <div className="h-8 w-px bg-slate-800 mx-2" />
         

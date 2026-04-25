@@ -88,7 +88,7 @@ export default function ApiSettingsModal({ isOpen, onClose }: ApiSettingsModalPr
                   onClick={() => {
                     const newPlatform = p.id as any;
                     let defaultModel = config.model;
-                    if (newPlatform === 'gemini') defaultModel = 'gemini-3-flash-preview';
+                    if (newPlatform === 'gemini') defaultModel = 'gemini-2.5-flash';
                     else if (newPlatform === 'openai') defaultModel = 'gpt-4o-mini';
                     else if (newPlatform === 'custom') defaultModel = 'deepseek-chat';
                     
@@ -109,14 +109,28 @@ export default function ApiSettingsModal({ isOpen, onClose }: ApiSettingsModalPr
 
           {/* Model */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">模型名称</label>
-            <input
-              type="text"
-              value={config.model}
-              onChange={(e) => setConfig({ ...config, model: e.target.value })}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-slate-600"
-              placeholder={config.platform === 'gemini' ? 'gemini-1.5-pro' : 'gpt-4o'}
-            />
+            <label className="text-sm font-medium text-slate-300">模型名称 (Model)</label>
+            {config.platform === 'gemini' ? (
+              <select
+                value={config.model}
+                onChange={(e) => setConfig({ ...config, model: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all appearance-none"
+              >
+                <option value="gemini-2.5-flash">gemini-2.5-flash (推荐，速度快)</option>
+                <option value="gemini-2.5-pro">gemini-2.5-pro (适合复杂推理)</option>
+                <option value="gemini-3-flash-preview">gemini-3-flash-preview (最新闪电版)</option>
+                <option value="gemini-1.5-pro">gemini-1.5-pro (经典推理模型)</option>
+                <option value="gemini-1.5-flash">gemini-1.5-flash (经典快速模型)</option>
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={config.model}
+                onChange={(e) => setConfig({ ...config, model: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-slate-600"
+                placeholder={config.platform === 'gemini' ? 'gemini-1.5-pro' : 'gpt-4o'}
+              />
+            )}
           </div>
 
           {/* Base URL (only for non-gemini) */}

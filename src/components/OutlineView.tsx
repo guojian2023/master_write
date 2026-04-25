@@ -30,6 +30,8 @@ export default function OutlineView({ thesis, onUpdate, onSelectSection }: Outli
   const [isAutoWriting, setIsAutoWriting] = useState(false);
   const [editingTargetWordSectionId, setEditingTargetWordSectionId] = useState<string | null>(null);
   const [editTargetWordCount, setEditTargetWordCount] = useState<number>(0);
+  const [isEditingTotalWords, setIsEditingTotalWords] = useState(false);
+  const [editTotalWords, setEditTotalWords] = useState<number>(30000);
 
   const handleAutoWrite = async () => {
     if (isAutoWriting) return;
@@ -74,9 +76,9 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
 1. 【强逻辑性】：必须确保章节内容与全局大纲及前后章节衔接严密，体现管理学逻辑的连贯性。
 2. 【专业深度】：深度融入管理学、工程学、运筹学或相关行业理论。如果是案例分析或方案设计，必须充实具体。
 3. 【学术规范】：使用严谨的学术书面语，客观陈述，禁止使用口语、感叹号或第一人称“我”、“我们”。
-4. 【字数要求】：扩充或生成符合要求的高质量文本。
+4. 【精确字数控制】：你必须严格按照【目标字数：约 ${section.targetWordCount || Math.floor(getTargetWords(cIdx)/3)} 字】为您生成的内容设定篇幅，避免生成内容与预期字数差异过大！如果字数较多，应合理增加小标题展开论述；如果字数较少，则提炼核心观点。
 
-直接返回生成的学术正文，不要包含任何引导性话语。`;
+直接返回生成的学术正文，不要包含任何引导性话语或多余解释。`;
                
              const newContent = await askAI(prompt, SYSTEM_PROMPTS.CONTENT_EXPANDER);
              
@@ -167,9 +169,23 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
 
   // Dr. Huang's Sleeping Beauty Ratios (approximate word count distribution)
   const getTargetWords = (chapterIdx: number) => {
-    const total = 30000; // Default 30k target
+    const total = thesis.targetTotalWords || 30000; // Default 30k target
     const ratios = [0.1, 0.15, 0.25, 0.2, 0.25, 0.05]; // Approximate chapter weight
     return Math.floor(total * (ratios[chapterIdx] || 0.1));
+  };
+
+  const handleUpdateTotalWords = (newTotal: number) => {
+    // Distribute words across existing sections based on standard ratios
+    const newChapters = thesis.chapters.map((chapter, cIdx) => {
+      const targetChapterWords = Math.floor(newTotal * ([0.1, 0.15, 0.25, 0.2, 0.25, 0.05][cIdx] || 0.1));
+      const newSections = chapter.sections.map((section, sIdx) => ({
+        ...section,
+        targetWordCount: Math.floor(targetChapterWords / chapter.sections.length)
+      }));
+      return { ...chapter, sections: newSections };
+    });
+    
+    onUpdate({ ...thesis, targetTotalWords: newTotal, chapters: newChapters });
   };
 
   const handleExport = () => {
@@ -201,13 +217,57 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
         <div className="flex gap-4">
           <div className="px-5 py-3 bento-card flex items-center gap-3">
             <Clock className="w-4 h-4 text-blue-500" />
-            <span className="text-xs font-bold text-slate-400">
-              已撰写字数: <span className="text-white font-mono tracking-wider ml-1">
+            <span className="text-xs font-bold text-slate-400 flex items-center">
+              已撰写字数: <span className="text-white font-mono tracking-wider ml-1 mr-1">
                 {thesis.chapters.reduce((acc, c) => acc + c.sections.reduce((sAcc, s) => sAcc + (s.content?.length || 0), 0), 0).toLocaleString()}
               </span>
-              <span className="text-slate-600 font-mono tracking-wider ml-1">
-                / {thesis.chapters.reduce((acc, c) => acc + c.sections.reduce((sAcc, s) => sAcc + (s.targetWordCount || Math.floor(getTargetWords(thesis.chapters.indexOf(c))/3)), 0), 0).toLocaleString()}
-              </span>
+              / 
+              <div className="flex items-center ml-1 group">
+                {isEditingTotalWords ? (
+                  <div className="flex items-center gap-1 ml-1" onClick={e => e.stopPropagation()}>
+                    <input 
+                      type="number" 
+                      value={editTotalWords}
+                      onChange={e => setEditTotalWords(Number(e.target.value))}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          handleUpdateTotalWords(editTotalWords);
+                          setIsEditingTotalWords(false);
+                        }
+                      }}
+                      autoFocus
+                      className="w-16 bg-slate-900 border border-blue-500 rounded px-1 py-0.5 text-white outline-none font-mono"
+                    />
+                    <button 
+                      onClick={() => {
+                        handleUpdateTotalWords(editTotalWords);
+                        setIsEditingTotalWords(false);
+                      }} 
+                      className="text-blue-400 hover:text-blue-300 ml-1"
+                    >
+                      <Check className="w-3 h-3" />
+                    </button>
+                    <button onClick={() => setIsEditingTotalWords(false)} className="text-slate-500 hover:text-slate-400 ml-1">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="text-slate-600 font-mono tracking-wider">
+                      {(thesis.targetTotalWords || 30000).toLocaleString()}
+                    </span>
+                    <span 
+                      className="ml-2 text-[10px] text-blue-400/50 hover:text-blue-400 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => {
+                        setEditTotalWords(thesis.targetTotalWords || 30000);
+                        setIsEditingTotalWords(true);
+                      }}
+                    >
+                      设置
+                    </span>
+                  </>
+                )}
+              </div>
             </span>
           </div>
           <button 

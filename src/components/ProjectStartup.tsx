@@ -8,26 +8,74 @@ import {
   Loader2,
   AlertCircle,
   BookOpen,
-  Wifi
+  Wifi,
+  Trash2,
+  Check
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { Thesis } from '../types';
+import { askAI, SYSTEM_PROMPTS } from '../services/aiService';
 
 interface ProjectStartupProps {
   onStart: (data: { topic: string; type: string; field: string }) => void;
   isLoading: boolean;
-  existingThesis?: Thesis | null;
-  onLoadExisting?: () => void;
+  theses?: Thesis[];
+  onLoadExisting?: (id: string) => void;
+  onDeleteThesis?: (id: string) => void;
 }
 
-export default function ProjectStartup({ onStart, isLoading, existingThesis, onLoadExisting }: ProjectStartupProps) {
+export default function ProjectStartup({ onStart, isLoading, theses = [], onLoadExisting, onDeleteThesis }: ProjectStartupProps) {
   const [step, setStep] = useState(1);
   const [topic, setTopic] = useState('');
   const [type, setType] = useState('case');
   const [field, setField] = useState('');
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<{status: 'success' | 'error', message: string} | null>(null);
+
+  const [showAiNaming, setShowAiNaming] = useState(false);
+  const [namingData, setNamingData] = useState({ object: '', problem: '', method: '', keywords: '' });
+  const [generatedTitles, setGeneratedTitles] = useState<string[]>([]);
+  const [isGeneratingTitles, setIsGeneratingTitles] = useState(false);
+  const [namingError, setNamingError] = useState('');
+
+  const handleGenerateTitles = async () => {
+    if (!namingData.object || !namingData.problem) {
+      setNamingError('请至少填写研究对象和核心问题');
+      return;
+    }
+    setNamingError('');
+    setIsGeneratingTitles(true);
+    setGeneratedTitles([]);
+    
+    try {
+      const prompt = `
+        研究对象：${namingData.object}
+        核心问题：${namingData.problem}
+        理论方法：${namingData.method}
+        补充关键词：${namingData.keywords}
+      `;
+      const response = await askAI(prompt, SYSTEM_PROMPTS.TITLE_GENERATOR);
+      
+      let parsed = [];
+      try {
+        const cleanJson = response.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+        parsed = JSON.parse(cleanJson);
+      } catch (e) {
+        throw new Error('AI 返回的数据格式无法解析');
+      }
+      
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setGeneratedTitles(parsed);
+      } else {
+        throw new Error('AI 未能生成有效的题目列表');
+      }
+    } catch (e: any) {
+      setNamingError(e.message || '生成失败，请重试');
+    } finally {
+      setIsGeneratingTitles(false);
+    }
+  };
 
   const questions = [
     { id: 1, text: '准备好了吗？（数据收集是否可行）', checked: false },
@@ -61,34 +109,58 @@ export default function ProjectStartup({ onStart, isLoading, existingThesis, onL
 
   return (
     <div className="max-w-5xl mx-auto py-12 px-4">
-      {existingThesis && (
+      {theses.length > 0 && (
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-12"
         >
-          <h3 className="label-caps mb-6 opacity-40">已生成的论文记录</h3>
-          <div 
-            onClick={onLoadExisting}
-            className="bento-card p-8 flex items-center justify-between cursor-pointer group hover:bg-blue-600/5 transition-all border-blue-500/20"
-          >
-            <div className="flex items-center gap-6">
-              <div className="w-16 h-16 rounded-2xl bg-blue-600/10 flex items-center justify-center border border-blue-500/20">
-                <BookOpen className="w-8 h-8 text-blue-400" />
-              </div>
-              <div>
-                <h4 className="text-xl font-black text-white mb-2">{existingThesis.topic}</h4>
-                <div className="flex items-center gap-4">
-                  <span className="label-caps opacity-50">类型: {existingThesis.researchType === 'case' ? '案例研究' : existingThesis.researchType === 'special' ? '专题研究' : '设计类'}</span>
-                  <div className="w-1 h-1 bg-slate-700 rounded-full" />
-                  <span className="label-caps opacity-50">领域: {existingThesis.field}</span>
+          <h3 className="label-caps mb-6 opacity-40">已生成的论文记录 ({theses.length})</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {theses.map((thesis) => (
+              <div 
+                key={thesis.id}
+                onClick={() => onLoadExisting && onLoadExisting(thesis.id)}
+                className="bento-card p-6 flex flex-col justify-between cursor-pointer group hover:bg-blue-600/5 transition-all border-blue-500/20 relative"
+              >
+                <div className="flex items-start gap-4 mb-6">
+                  <div className="w-12 h-12 rounded-xl bg-blue-600/10 flex items-center justify-center border border-blue-500/20 shrink-0">
+                    <BookOpen className="w-6 h-6 text-blue-400" />
+                  </div>
+                  <div className="flex-1 pr-8 text-left">
+                    <h4 className="text-lg font-black text-white mb-2 line-clamp-2">{thesis.topic}</h4>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="label-caps text-[10px] opacity-50 bg-slate-800 px-2 py-1 rounded">
+                        {thesis.researchType === 'case' ? '案例' : thesis.researchType === 'special' ? '专题' : '设计'}
+                      </span>
+                      <span className="label-caps text-[10px] opacity-50 bg-slate-800 px-2 py-1 rounded">
+                        {thesis.field}
+                      </span>
+                      <span className="label-caps text-[10px] opacity-50 whitespace-nowrap">
+                        {new Date(thesis.updatedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-auto">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm('确定要删除这篇论文吗？删除后无法恢复。')) {
+                        onDeleteThesis && onDeleteThesis(thesis.id);
+                      }
+                    }}
+                    className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  <button className="flex items-center gap-2 text-sm text-blue-400 font-bold group-hover:translate-x-1 transition-transform">
+                    开启撰写
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-            </div>
-            <button className="flex items-center gap-2 text-blue-400 font-bold group-hover:translate-x-2 transition-transform">
-              继续撰写
-              <ArrowRight className="w-5 h-5" />
-            </button>
+            ))}
           </div>
         </motion.div>
       )}
@@ -120,7 +192,104 @@ export default function ProjectStartup({ onStart, isLoading, existingThesis, onL
             
             <div className="space-y-8">
               <div>
-                <label className="label-caps block mb-3 opacity-50 ml-1">论文题目</label>
+                <div className="flex justify-between items-end mb-3">
+                  <label className="label-caps block opacity-50 ml-1">论文题目</label>
+                  <button 
+                    onClick={() => setShowAiNaming(!showAiNaming)} 
+                    className={cn(
+                      "text-xs flex items-center gap-1.5 transition-colors font-medium px-3 py-1.5 rounded-full border",
+                      showAiNaming 
+                        ? "bg-blue-500/20 text-blue-400 border-blue-500/30" 
+                        : "bg-slate-800 text-slate-400 border-slate-700 hover:text-blue-400 hover:bg-slate-800"
+                    )}
+                  >
+                    <Sparkles className="w-3 h-3" /> 
+                    {showAiNaming ? "收起 AI 拟题" : "AI 辅助拟题"}
+                  </button>
+                </div>
+                
+                {showAiNaming && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="mb-6 p-6 rounded-xl bg-blue-900/10 border border-blue-500/20 space-y-4"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 mb-1.5">研究对象 (必填)</label>
+                        <input 
+                          type="text" 
+                          value={namingData.object}
+                          onChange={(e) => setNamingData({...namingData, object: e.target.value})}
+                          placeholder="如：某医药公司的研发项目"
+                          className="w-full bg-[#0F172A] px-3 py-2.5 rounded-lg border border-slate-700 focus:border-blue-500 outline-none text-sm text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 mb-1.5">要解决的核心问题 (必填)</label>
+                        <input 
+                          type="text" 
+                          value={namingData.problem}
+                          onChange={(e) => setNamingData({...namingData, problem: e.target.value})}
+                          placeholder="如：进度延期、流程低效"
+                          className="w-full bg-[#0F172A] px-3 py-2.5 rounded-lg border border-slate-700 focus:border-blue-500 outline-none text-sm text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 mb-1.5">理论或方法 (可选)</label>
+                        <input 
+                          type="text" 
+                          value={namingData.method}
+                          onChange={(e) => setNamingData({...namingData, method: e.target.value})}
+                          placeholder="如：敏捷管理、六西格玛"
+                          className="w-full bg-[#0F172A] px-3 py-2.5 rounded-lg border border-slate-700 focus:border-blue-500 outline-none text-sm text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 mb-1.5">其他关键词 (可选)</label>
+                        <input 
+                          type="text" 
+                          value={namingData.keywords}
+                          onChange={(e) => setNamingData({...namingData, keywords: e.target.value})}
+                          placeholder="如：风险管控体系"
+                          className="w-full bg-[#0F172A] px-3 py-2.5 rounded-lg border border-slate-700 focus:border-blue-500 outline-none text-sm text-white"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-xs text-red-400 font-medium">{namingError}</span>
+                      <button
+                        onClick={handleGenerateTitles}
+                        disabled={isGeneratingTitles}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isGeneratingTitles ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        生成高质量命题
+                      </button>
+                    </div>
+                    
+                    {generatedTitles.length > 0 && (
+                      <div className="mt-6 space-y-2">
+                        <p className="text-xs font-bold text-blue-400 mb-2">请选择一个题目（点击即可）：</p>
+                        {generatedTitles.map((t, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              setTopic(t);
+                              setShowAiNaming(false);
+                            }}
+                            className="w-full text-left p-3 rounded-lg bg-[#0F172A] border border-blue-500/20 hover:border-blue-500 hover:bg-blue-500/5 transition-colors text-sm text-slate-300 flex items-center justify-between group"
+                          >
+                            <span>{t}</span>
+                            <Check className="w-4 h-4 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+
                 <input 
                   type="text" 
                   value={topic}
