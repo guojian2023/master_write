@@ -14,9 +14,11 @@ export default function Header({ activeTab, thesisTopic, thesis }: HeaderProps) 
   const titles: Record<string, string> = {
     project: '项目列表',
     outline: '大纲管理',
+    proposal: '开题报告',
     editor: '正文撰写',
     literature: '文献管理',
     audit: '审计中心',
+    styles: '写作风格',
   };
 
   // Calculate completion percentage

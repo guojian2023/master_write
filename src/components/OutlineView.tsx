@@ -52,6 +52,7 @@ export default function OutlineView({ thesis, onUpdate, onSelectSection }: Outli
              const prevSection = currentIndex > 0 ? allSections[currentIndex - 1] : null;
              const nextSection = currentIndex < allSections.length - 1 ? allSections[currentIndex + 1] : null;
 
+             const styleInstruction = thesis.writingStyle ? `\n5. 【强制独有写作风格】：\n${thesis.writingStyle}` : '';
              const prompt = `
 论文题目：${newThesis.topic}
 研究类型：MEM（工程管理硕士）
@@ -76,7 +77,7 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
 1. 【强逻辑性】：必须确保章节内容与全局大纲及前后章节衔接严密，体现管理学逻辑的连贯性。
 2. 【专业深度】：深度融入管理学、工程学、运筹学或相关行业理论。如果是案例分析或方案设计，必须充实具体。
 3. 【学术规范】：使用严谨的学术书面语，客观陈述，禁止使用口语、感叹号或第一人称“我”、“我们”。
-4. 【精确字数控制】：你必须严格按照【目标字数：约 ${section.targetWordCount || Math.floor(getTargetWords(cIdx)/3)} 字】为您生成的内容设定篇幅，避免生成内容与预期字数差异过大！如果字数较多，应合理增加小标题展开论述；如果字数较少，则提炼核心观点。
+4. 【精确字数控制】：你必须严格按照【目标字数：约 ${section.targetWordCount || Math.floor(getTargetWords(cIdx)/3)} 字】为您生成的内容设定篇幅，避免生成内容与预期字数差异过大！如果字数较多，应合理增加小标题展开论述；如果字数较少，则提炼核心观点。${styleInstruction}
 
 直接返回生成的学术正文，不要包含任何引导性话语或多余解释。`;
                

@@ -10,26 +10,30 @@ import {
   BookOpen,
   Wifi,
   Trash2,
-  Check
+  Check,
+  FileText
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
-import { Thesis } from '../types';
+import { Thesis, WritingStyle } from '../types';
 import { askAI, SYSTEM_PROMPTS } from '../services/aiService';
 
 interface ProjectStartupProps {
-  onStart: (data: { topic: string; type: string; field: string }) => void;
+  onStart: (data: { topic: string; type: string; field: string; writingStyle?: string }) => void;
   isLoading: boolean;
   theses?: Thesis[];
+  savedStyles?: WritingStyle[];
   onLoadExisting?: (id: string) => void;
   onDeleteThesis?: (id: string) => void;
 }
 
-export default function ProjectStartup({ onStart, isLoading, theses = [], onLoadExisting, onDeleteThesis }: ProjectStartupProps) {
+export default function ProjectStartup({ onStart, isLoading, theses = [], savedStyles = [], onLoadExisting, onDeleteThesis }: ProjectStartupProps) {
   const [step, setStep] = useState(1);
   const [topic, setTopic] = useState('');
   const [type, setType] = useState('case');
   const [field, setField] = useState('');
+  const [selectedStyleId, setSelectedStyleId] = useState<string>('');
+  
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<{status: 'success' | 'error', message: string} | null>(null);
 
@@ -356,7 +360,10 @@ export default function ProjectStartup({ onStart, isLoading, theses = [], onLoad
                     </div>
                     <button
                       disabled={!topic || !field || !isTestPassed || isLoading}
-                      onClick={() => onStart({ topic, type, field })}
+                      onClick={() => {
+                        const styleContent = selectedStyleId ? savedStyles.find(s => s.id === selectedStyleId)?.content : undefined;
+                        onStart({ topic, type, field, writingStyle: styleContent });
+                      }}
                       className={cn(
                         "w-full flex items-center justify-center gap-3 py-4 rounded-xl font-bold transition-all shadow-xl",
                         (!topic || !field || !isTestPassed || isLoading)
@@ -421,12 +428,45 @@ export default function ProjectStartup({ onStart, isLoading, theses = [], onLoad
               </div>
             </div>
 
-            <div className="mt-auto pt-10 relative z-10">
-              <div className="p-4 bg-black/20 rounded-2xl border border-white/5 flex items-start gap-3 backdrop-blur-sm">
-                <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
-                <p className="text-[10px] text-blue-100/60 leading-relaxed font-medium">
-                  提示：如果您有任何一项无法确定，建议联系导师确认调研数据的可获得性，否则后期将面临巨大的修改压力。
-                </p>
+            <div className="mt-6 relative z-10">
+              <h3 className="label-caps text-blue-200 mb-4 flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                03. 关联写作风格 (可选)
+              </h3>
+              <p className="text-[10px] text-blue-100/60 leading-relaxed font-medium mb-4">
+                为该论文项目关联已提取的写作风格，让 AI 在成文时保持特定的用词、节奏和句式。
+              </p>
+              
+              <div className="space-y-3">
+                {savedStyles && savedStyles.length > 0 ? (
+                  <div className="space-y-2">
+                    <select
+                      value={selectedStyleId}
+                      onChange={(e) => setSelectedStyleId(e.target.value)}
+                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors backdrop-blur-sm appearance-none"
+                    >
+                      <option value="" className="bg-[#0F172A]">-- 不使用风格 (默认) --</option>
+                      {savedStyles.map(s => (
+                        <option key={s.id} value={s.id} className="bg-[#0F172A]">{s.name}</option>
+                      ))}
+                    </select>
+                    <div className="text-[10px] text-blue-200/50 flex justify-end">
+                      <span className="flex items-center gap-1"><Sparkles className="w-3 h-3" /> 您可以在左侧导航栏的“写作风格”模块中管理或提取新的风格。</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-black/20 border border-white/10 rounded-xl px-4 py-4 text-center backdrop-blur-sm">
+                    <p className="text-sm text-blue-100/60 mb-2">暂无已保存的写作风格</p>
+                    <p className="text-[10px] text-blue-200/50">请在左侧导航栏中前往“写作风格”模块添加。</p>
+                  </div>
+                )}
+                
+                <div className="mt-4 pt-4 border-t border-white/5 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+                  <p className="text-[10px] text-blue-100/60 leading-relaxed font-medium">
+                    提示：如果您有任何一项无法确定，建议联系导师确认调研数据的可获得性，否则后期将面临巨大的修改压力。
+                  </p>
+                </div>
               </div>
             </div>
 

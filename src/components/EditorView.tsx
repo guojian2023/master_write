@@ -9,7 +9,8 @@ import {
   Type,
   RefreshCw,
   MessageSquareDiff,
-  BookOpen
+  BookOpen,
+  Play
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Thesis, Section } from '../types';
@@ -26,6 +27,7 @@ export default function EditorView({ thesis, onUpdate, initialSectionId }: Edito
   const [activeSectionId, setActiveSectionId] = useState<string | null>(initialSectionId || null);
   const [content, setContent] = useState('');
   const [isExpanding, setIsExpanding] = useState(false);
+  const [isContinuing, setIsContinuing] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
   const [revisionComment, setRevisionComment] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -65,6 +67,30 @@ export default function EditorView({ thesis, onUpdate, initialSectionId }: Edito
     onUpdate(updatedThesis);
   };
 
+  const handleAIContinue = async () => {
+    if (isContinuing || !content || !activeSectionId) return;
+    setIsContinuing(true);
+    setErrorMsg(null);
+    try {
+      const styleInstruction = thesis.writingStyle ? `\n\n【强制独有写作风格】：\n${thesis.writingStyle}` : '';
+      const proposalConstraint = thesis.proposal?.constraintPrompt ? `\n\n【开题报告核心约束】：\n${thesis.proposal.constraintPrompt}\n说明：续写时请极其严格地保证与开题报告的逻辑一致性。` : '';
+      const prompt = `现有部分正文内容如下（请注意，这是半途中断、未写完的内容）：\n\n${content}\n\n请严格顺着上述思路直接接着最后的这句话继续写下去，只需输出接下来的内容文本，绝不重复上述已有内容。${styleInstruction}${proposalConstraint}`;
+      
+      const continuedContent = await askAI(prompt, SYSTEM_PROMPTS.CONTENT_CONTINUER);
+      if (continuedContent && continuedContent.trim()) {
+        const newText = content.endsWith('\n') ? continuedContent : '\n' + continuedContent;
+        handleContentChange(content + newText);
+      } else {
+         setErrorMsg("AI认为当前内容已完整，未生成新内文。");
+      }
+    } catch (e: any) {
+      console.error("AI Continue error:", e);
+      setErrorMsg(`AI 续写报错: ${e.message || String(e)}`);
+    } finally {
+       setIsContinuing(false);
+    }
+  };
+
   const allSections: Section[] = [];
   thesis.chapters.forEach(c => allSections.push(...c.sections));
   const currentIndex = activeSectionId ? allSections.findIndex(s => s.id === activeSectionId) : -1;
@@ -82,6 +108,8 @@ export default function EditorView({ thesis, onUpdate, initialSectionId }: Edito
         `- 第${i+1}章 ${c.title}\n  ${c.sections.map((s, j) => `  * ${i+1}.${j+1} ${s.title}`).join('\n')}`
       ).join('\n');
 
+      const styleInstruction = thesis.writingStyle ? `\n5. 【强制独有写作风格】：\n${thesis.writingStyle}` : '';
+      const proposalConstraint = thesis.proposal?.constraintPrompt ? `\n[开题报告核心约束]\n${thesis.proposal.constraintPrompt}\n系统要求：生成全文初稿或扩写时，务必将上述核心理念贯彻始终，确保不偏题。` : '';
       const prompt = `
 论文题目：${thesis.topic}
 研究类型：MEM（工程管理硕士）
@@ -89,6 +117,8 @@ export default function EditorView({ thesis, onUpdate, initialSectionId }: Edito
 
 [论文全局大纲]
 ${structure}
+
+${proposalConstraint}
 
 [上下文关联]
 ${prevSection ? `前一小节（${prevSection.title}）摘要或内容：\n${prevSection.content ? prevSection.content.substring(0, 800) : '(尚无内容)'}...` : '（本小节为首节）'}
@@ -106,7 +136,7 @@ ${content || '(该章节尚无内容，请严格按照学术规范结合全局�
 1. 【强逻辑性】：必须确保章节内容与全局大纲及前后章节衔接严密，体现管理学逻辑的连贯性。
 2. 【专业深度】：深度融入管理学、工程学、运筹学或相关行业理论。如果是案例分析或方案设计，必须充实具体。
 3. 【学术规范】：使用严谨的学术书面语，客观陈述，禁止使用口语、感叹号或第一人称“我”、“我们”。
-4. 【精确字数控制】：你必须严格按照【目标字数：约 ${currentSection?.targetWordCount || 1500} 字】为您生成的内容设定篇幅，避免生成内容与预期字数差异过大！如果字数较多，应合理增加小标题展开论述；如果字数较少，则提炼核心观点。
+4. 【精确字数控制】：你必须严格按照【目标字数：约 ${currentSection?.targetWordCount || 1500} 字】为您生成的内容设定篇幅，避免生成内容与预期字数差异过大！如果字数较多，应合理增加小标题展开论述；如果字数较少，则提炼核心观点。${styleInstruction}
 
 直接返回生成的学术正文，不要包含任何引导性话语或多余解释。
 `;
@@ -130,7 +160,8 @@ ${content || '(该章节尚无内容，请严格按照学术规范结合全局�
     setIsRewriting(true);
     setErrorMsg(null);
     try {
-      const prompt = `现有正文内容：\n${content}\n\n针对以上内容的修改意见：\n${revisionComment}\n\n请严格基于上述意见对正文进行重新组织和学术重写。`;
+      const proposalConstraint = thesis.proposal?.constraintPrompt ? `\n\n【开题报告核心约束】：\n${thesis.proposal.constraintPrompt}\n修改时请确保不偏离开题报告的主旨路线。` : '';
+      const prompt = `现有正文内容：\n${content}\n\n针对以上内容的修改意见：\n${revisionComment}\n\n请严格基于上述意见对正文进行重新组织和学术重写。${proposalConstraint}`;
       const rewritten = await askAI(prompt, SYSTEM_PROMPTS.CONTENT_REVISER);
       handleContentChange(rewritten);
       setRevisionComment('');
@@ -146,7 +177,8 @@ ${content || '(该章节尚无内容，请严格按照学术规范结合全局�
     setIsRewriting(true);
     setErrorMsg(null);
     try {
-      const rewritten = await askAI(`请将以下文字转化为专业的学术表述，去除口语化和第一人称：\n${content}`, SYSTEM_PROMPTS.ACADEMIC_REWRITER);
+      const proposalConstraint = thesis.proposal?.constraintPrompt ? `\n\n注意维持以下开题核心思想：\n${thesis.proposal.constraintPrompt}` : '';
+      const rewritten = await askAI(`请将以下文字转化为专业的学术表述，去除口语化和第一人称：\n${content}${proposalConstraint}`, SYSTEM_PROMPTS.ACADEMIC_REWRITER);
       handleContentChange(rewritten);
     } catch (e: any) {
       setErrorMsg(`AI 润色报错: ${e.message || String(e)}`);
@@ -246,6 +278,14 @@ ${content || '(该章节尚无内容，请严格按照学术规范结合全局�
                 >
                   {isRewriting ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                   学术润色
+                </button>
+                <button 
+                  onClick={handleAIContinue}
+                  disabled={isContinuing || isExpanding || !content}
+                  className="px-4 py-2 rounded-xl border border-indigo-700/50 bg-indigo-600/10 text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-600/20 hover:text-indigo-300 flex items-center gap-2 transition-all"
+                >
+                  {isContinuing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                  AI 续写
                 </button>
                 <button 
                   onClick={handleAIExpand}

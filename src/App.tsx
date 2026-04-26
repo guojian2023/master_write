@@ -12,7 +12,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Thesis, Chapter, Section, LogicIssue } from './types';
+import { Thesis, Chapter, Section, LogicIssue, WritingStyle } from './types';
 import { cn } from './lib/utils';
 import { askAI, SYSTEM_PROMPTS } from './services/aiService';
 
@@ -21,14 +21,17 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import ProjectStartup from './components/ProjectStartup';
 import OutlineView from './components/OutlineView';
+import ProposalView from './components/ProposalView';
 import EditorView from './components/EditorView';
 import AuditView from './components/AuditView';
 import LiteratureManager from './components/LiteratureManager';
 import ApiSettingsModal from './components/ApiSettingsModal';
+import StyleManager from './components/StyleManager';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'project' | 'outline' | 'editor' | 'literature' | 'audit'>('project');
+  const [activeTab, setActiveTab] = useState<'project' | 'outline' | 'proposal' | 'editor' | 'literature' | 'audit' | 'styles'>('project');
   const [theses, setTheses] = useState<Thesis[]>([]);
+  const [savedStyles, setSavedStyles] = useState<WritingStyle[]>([]);
   const [activeThesisId, setActiveThesisId] = useState<string | null>(null);
   
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
@@ -40,6 +43,17 @@ export default function App() {
   // Initialize from server or local storage
   useEffect(() => {
     const init = async () => {
+      // Load styles
+      try {
+        const stylesStr = localStorage.getItem('mem-saved-styles');
+        if (stylesStr) {
+          const parsed = JSON.parse(stylesStr);
+          if (Array.isArray(parsed)) setSavedStyles(parsed);
+        }
+      } catch (e) {
+        console.error("Failed to load saved styles from local storage");
+      }
+
       let remoteLoaded = false;
       try {
         const resp = await fetch('/api/load-theses');
@@ -120,7 +134,11 @@ export default function App() {
     }
   }, [thesis]);
 
-  const handleStartProject = async (data: { topic: string; type: string; field: string }) => {
+  useEffect(() => {
+    localStorage.setItem('mem-saved-styles', JSON.stringify(savedStyles));
+  }, [savedStyles]);
+
+  const handleStartProject = async (data: { topic: string; type: string; field: string; writingStyle?: string }) => {
     setIsInitializing(true);
     try {
       const prompt = `题目：${data.topic}\n类型：${data.type}\n领域：${data.field}`;
@@ -160,6 +178,7 @@ export default function App() {
         problems: [],
         solutions: [],
         citations: [],
+        writingStyle: data.writingStyle || undefined,
         updatedAt: new Date().toISOString()
       };
 
@@ -209,8 +228,24 @@ export default function App() {
                       setActiveThesisId(newTheses.length > 0 ? newTheses[0].id : null);
                     }
                   }}
+                  savedStyles={savedStyles}
                 />
               </motion.div>
+            )}
+
+            {activeTab === 'styles' && (
+               <motion.div
+                 key="styles"
+                 initial={{ opacity: 0, y: 20 }}
+                 animate={{ opacity: 1, y: 0 }}
+                 exit={{ opacity: 0, y: -20 }}
+               >
+                 <StyleManager 
+                   styles={savedStyles}
+                   onAddStyle={(style) => setSavedStyles(p => [...p, style])}
+                   onDeleteStyle={(id) => setSavedStyles(p => p.filter(s => s.id !== id))}
+                 />
+               </motion.div>
             )}
 
             {thesis && activeTab === 'outline' && (
@@ -224,6 +259,21 @@ export default function App() {
                   setSelectedSectionId(id);
                   setActiveTab('editor');
                 }} />
+              </motion.div>
+            )}
+
+            {thesis && activeTab === 'proposal' && (
+              <motion.div
+                key="proposal"
+                className="h-full"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <ProposalView 
+                  thesis={thesis} 
+                  onUpdate={updateThesis} 
+                />
               </motion.div>
             )}
 

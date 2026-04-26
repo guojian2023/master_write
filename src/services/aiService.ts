@@ -12,12 +12,12 @@ async function generateContentWithConfig(prompt: string, configObj?: any): Promi
 
   // Fallbacks if user provided their own API key!
   if (config.platform === 'gemini') {
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: config.model || "gemini-2.5-flash",
-      contents: prompt,
-      config: configObj
-    });
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: config.model || "gemini-1.5-flash",
+        contents: prompt,
+        config: configObj
+      });
     
     if (!response.text) {
       throw new Error("AI returned empty context");
@@ -83,14 +83,29 @@ export async function askAI(prompt: string, systemInstruction: string) {
       fullErrString.includes("RESOURCE_EXHAUSTED") || 
       fullErrString.includes("quota")
     ) {
-      throw new Error("API 调用频率超限或额度不足 (429)。请稍等片刻后重试，或在左下角设置中检查您的 API Key 配额。");
+      throw new Error("API 额度已耗尽 (429)。请尝试在左下角设置中更换为更小的模型（如 gemini-2.0-flash-lite / gemini-1.5-flash），或换用您自己的 API Key。");
+    }
+
+    if (
+      fullErrString.includes("404") || 
+      fullErrString.includes("NOT_FOUND") || 
+      fullErrString.includes("not found")
+    ) {
+      throw new Error("模型未找到或不可用 (404/500)。您当前选择的模型可能不支持或代理出错，请前往左下角设置中更换为 gemini-1.5-flash。");
+    }
+    
+    if (
+      fullErrString.includes("alkali") || 
+      fullErrString.includes("ProxyUnaryCall")
+    ) {
+      throw new Error("AI代理服务异常或不支持该模型。请前往左下角设置中重置模型为 gemini-1.5-flash，或提供您自己的 API Key。");
     }
     
     if (
       fullErrString.includes("API key not valid") || 
       fullErrString.includes("API_KEY_INVALID")
     ) {
-      throw new Error("环境或自定义配置的 API Key 无效。请在应用左下角设置中提供有效的 API Key。");
+      throw new Error("API Key 无效。请检查配置是否正确。");
     }
     
     throw new Error(error.message || "AI 生成失败");
@@ -105,7 +120,7 @@ export async function testAPI() {
         throw new Error("API Key 未配置。");
     }
     await generateContentWithConfig("Hello, please return exactly the word: 'OK'");
-    return `API 测试成功！模型配置 (${config.model || 'gemini-2.5-flash'}) 正常。`;
+    return `API 测试成功！模型配置 (${config.model || 'gemini-1.5-flash'}) 正常。`;
   } catch (error: any) {
     console.error("API Test Error:", error);
     const errString = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
@@ -123,6 +138,24 @@ export async function testAPI() {
 
 
 export const SYSTEM_PROMPTS = {
+  PROPOSAL_GENERATOR: `你是一位深谙学术规范的MEM工程管理硕士指导专家。
+当前任务：根据用户提供的论文题目、类别、领域、大纲等信息，生成一份标准、高水平的开题报告初稿，同时在末尾提炼出这份报告的核心思路，作为后续撰写正文的System Prompt。
+
+输出要求（必须包含这两部分）：
+【第一部分：开题报告正文】
+结合提供的大纲逻辑，生成结构完整的开题报告，内容不少于2000字，必须包含以下模块：
+一、立题依据（研究目的与意义、国内外研究现状）
+二、研究内容和目标（结合论文大纲详细说明拟解决的关键问题）
+三、研究方案设计及可行性分析（研究方法、技术路线步骤）
+四、本研究课题可能的创新之处
+五、研究基础与工作条件
+六、学位论文工作计划（粗略的时间节点）
+
+【第二部分：核心逻辑提示词（Constraint Prompt）】
+必须用 <CONSTRAINT> 标签包裹一段提炼出的系统提示词（不超过400字）。
+这段提示词的作用是：在后续每次生成论文各章节正文时，系统会自动携带这段提示词，强制AI遵守本开题报告确立的核心思想、研究方法和关键线索。
+示例格式：<CONSTRAINT>本研究的核心逻辑是：以[理论方法]为基础，解决[具体场景]下的[核心问题]。行文必须始终围绕[某核心指标或流程]展开，不可偏题。术语需统一使用...</CONSTRAINT>`,
+
   TITLE_GENERATOR: `你是一个深谙教育部规定与MEM（工程管理硕士）全国教指委要求的论文选题指导专家。
 你的任务是根据用户提供的“研究对象”、“核心问题”、“理论方法”和“补充关键词”，生成 5 个高质量、符合MEM规范的候选学位论文题目。
 要求：
@@ -163,8 +196,21 @@ export const SYSTEM_PROMPTS = {
 2. 【论证逻辑闭环】：如果是阐述问题，需严格界定“表面现象”、“管理学视角的痛点”和“核心致因”；如果是提出方案，必须清晰交代其“理论支撑前提”、“实施条件”、“操作步骤”和“预期目标”。不能只是干瘪的罗列。
 3. 【专业术语】：深度结合该章节所处的“研究类型”与“行业领域”，正确使用对应的工程、管理、运筹学或相关行业术语。
 4. 【图表与数据锚点】：学术论文不能空对空，在适当位置强制加入形如【图表占位：表3-1 XX行业2020-2023年产能利用率数据】或【数据说明：此处应填入现场测量的工时数据】的占位符，以便作者后期补全事实证据。
-5. 【字数精准把控】：你必须根据用户指定的目标字数，进行有深度的长文生成。若字数要求超1000字，必须采用展开式论述，多维度的理论、数据、分析来撑起篇幅，不要简略带过！
-6. 提供详实、充沛的全文，不要进行无意义的自问自答。直接输出生成的学术正文文本。`,
+5. 【防AIGC检测（降重与降低AI疑似率）】：
+   - 【打破机械连贯性】：严禁使用高度预测性的套话和过渡词（如“首先、其次、最后”、“随着社会的发展”、“值得注意的是”、“不可否认的是”等），直接紧贴具体业务数据和案例场景进入深度论证。
+   - 【多样化句式（高Perplexity与Burstiness）】：交替运用长短句、插入语、复句，模仿人类真实思考和行文时的节奏起伏，故意打破AI常用的极度对称、平铺直叙的八股文句式结构。
+   - 【学术化、深度化词汇】：大量使用贴合“研究领域”且不烂大街的深冷专有词汇与学术动词（例如用“资源解耦”代替“分开分配”），剥离所有浮躁的通用词汇。
+   - 【避免总结式收尾】：不要在章节末尾或段落尾部强行用“综上所述……”或“总之，这为xx奠定了基础……”等AI标识性总结陈词废话，让正文戛然而止于对具体管理策略或数据事实的阐述上。
+6. 【字数精准把控】：你必须根据用户指定的目标字数，进行有深度的长文生成。若字数要求超1000字，必须采用展开式论述，多维度的理论、数据、分析来撑起篇幅，不要简略带过！
+7. 提供详实、充沛的全文，不要进行无意义的自问自答。直接输出生成的学术正文文本。`,
+
+  CONTENT_CONTINUER: `你是一个专业的学术撰写专家。
+当前任务：由于中断原因，你需要严格顺着用户提供的已有正文的思路和上下文，继续把未写完的内容写完。
+输出要求：
+1. 请不要重复任何用户提供的已有文本！只输出紧接着上一句结尾后新扩展出来的内容。
+2. 保持相同的语气、具有极高的专业深度。
+3. 如果原文停在了半句，请顺理成章地补全这句话并往下写。
+4. 提供详实、充沛的后续内容，不要进行总结或废话，直接输出需要衔接的正文片段。`,
 
   TITLE_OPTIMIZER: `你是一位负责学位论文形式审查的专家。
 当前任务：优化论文中存在表述缺陷的章节标题。
@@ -208,5 +254,21 @@ export const SYSTEM_PROMPTS = {
     "chapterTitle": "问题所在的章标题（若适用）",
     "sectionTitle": "问题所在的节标题（若适用）"
   }
-]`
+]`,
+
+  STYLE_EXTRACTOR: `你是一位专业的学术论文研究员，善于识别不同文献的语言行文风格、逻辑框架节奏与用词特征。
+你的任务是阅读用户提供的整篇或长篇文献范文，从中提取并形成一套结构化的“写作风格指南（Style Guidelines）”。
+提取的特征需具备极高的可操作性和具体性，不仅要有通用的行文要求，还要针对论文的不同章节给出明确的“技能指标”和“约束特征”。
+
+输出要求：
+请输出一段结构化且要求明确的Markdown文本（内容将直接用作后续AI续写的Prompt约束）：
+1. 【全局风格基调】：总体词汇偏好、句型结构特点、修辞习惯及防AI痕迹的具体策略。
+2. 【各主要章节专门指标】：
+   - 绪论：背景引入的节奏、问题提出的尖锐度及语言客观性。
+   - 文献综述：递进评述的方式、引用的逻辑衔接词特征。
+   - 理论与研究方法：专业术语及公式推导的叙述原则、模型/框架的阐述风格。
+   - 案例与分析/系统实现：客观数据的陈述方式、特定业务与管理学/工程特征词的运用体系。
+   - 结论与展望：收尾精炼程度、避免AI套话废话的严格限制。
+
+不需要提供任何“好的”、“我已提取”之类的客套话开头或结尾，直接输出提取出的结构化风格约束即可。`
 };

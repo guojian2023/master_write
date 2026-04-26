@@ -7,7 +7,8 @@ import {
   ShieldCheck, 
   Target,
   Library,
-  Settings
+  Settings,
+  Sparkles
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -21,7 +22,9 @@ interface SidebarProps {
 export default function Sidebar({ activeTab, setActiveTab, hasProject, onOpenSettings }: SidebarProps) {
   const menuItems = [
     { id: 'project', label: '项目列表', icon: Target },
+    { id: 'styles', label: '写作风格', icon: Sparkles },
     { id: 'outline', label: '大纲管理', icon: Layout, disabled: !hasProject },
+    { id: 'proposal', label: '开题报告', icon: FileText, disabled: !hasProject },
     { id: 'editor', label: '正文撰写', icon: FileText, disabled: !hasProject },
     { id: 'literature', label: '文献管理', icon: Library, disabled: !hasProject },
     { id: 'audit', label: '逻辑审计', icon: ShieldCheck, disabled: !hasProject },

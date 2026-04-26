@@ -1,3 +1,10 @@
+export interface WritingStyle {
+  id: string;
+  name: string;
+  content: string; // The extracted style prompt constraint
+  createdAt: string;
+}
+
 export interface Citation {
   id: string;
   type: 'article' | 'book' | 'thesis' | 'conference' | 'web';
@@ -27,6 +34,11 @@ export interface Chapter {
   description?: string;
 }
 
+export interface Proposal {
+  content: string;
+  constraintPrompt: string;
+}
+
 export interface Thesis {
   id: string;
   topic: string;
@@ -37,6 +49,8 @@ export interface Thesis {
   solutions: string[]; // Proposed solutions
   citations: Citation[];
   targetTotalWords?: number;
+  writingStyle?: string;
+  proposal?: Proposal;
   updatedAt: string;
 }
 
