@@ -90,54 +90,7 @@ export default function GenerationManager({ thesis, onUpdate, onNavigate }: Gene
     }
   }, []);
 
-  const handleExecute = async (stepId: GenerationStepId) => {
-    if (stepId === 'proposal') {
-      setRunningStep('proposal');
-      try {
-        const outlineStr = thesis.chapters.map(c => 
-          `${c.title}\n` + c.sections.map(s => `  - ${s.title}`).join('\n')
-        ).join('\n');
-  
-        const prompt = `项目题目：${thesis.topic}\n研究类别：${thesis.researchType}\n所在领域：${thesis.field}\n
-  论文大纲结构如下：\n${outlineStr}\n
-  请根据以上信息，严格按照您的System Prompt要求，生成开题报告全文，并在末尾使用 <CONSTRAINT> 标签提炼提示词。`;
-  
-        const config = getApiConfig();
-        const customConfig = thesis.generationNodes?.['proposal']?.customConfig;
-        const apiConfigOverride = customConfig?.enabled ? {
-          platform: customConfig.platform,
-          model: customConfig.model || config.model,
-          baseUrl: customConfig.baseUrl,
-          apiKey: customConfig.apiKey
-        } : undefined;
-
-        const response = await askAI(prompt, SYSTEM_PROMPTS.PROPOSAL_GENERATOR, apiConfigOverride);
-        
-        const constraintMatch = response.match(/<CONSTRAINT>([\s\S]*?)<\/CONSTRAINT>/);
-        const constraintPrompt = constraintMatch ? constraintMatch[1].trim() : '';
-        const cleanContent = response.replace(/<CONSTRAINT>[\s\S]*?<\/CONSTRAINT>/g, '').trim();
-  
-        const usedModel = apiConfigOverride ? apiConfigOverride.model : (config.model || 'Unknown');
-
-        const updatedThesis: Thesis = {
-          ...thesis,
-          proposal: { content: cleanContent, constraintPrompt: constraintPrompt },
-          generationNodes: {
-            ...thesis.generationNodes,
-            proposal: { stepId: 'proposal', status: 'success', updatedAt: new Date().toISOString(), modelUsed: usedModel }
-          }
-        };
-        onUpdate(updatedThesis);
-      } catch (e: any) {
-        alert("执行失败: " + e.message);
-      } finally {
-        setRunningStep(null);
-      }
-    } else {
-      // Navigate for steps that require huge context or forms (like Setup / Body)
-      onNavigate(steps.find(s => s.id === stepId)?.targetTab);
-    }
-  };
+  // Execute functions are now delegated to their respective tabs.
 
   const globalConfig = getApiConfig();
 
@@ -191,22 +144,12 @@ export default function GenerationManager({ thesis, onUpdate, onNavigate }: Gene
                         <p className="text-xs text-slate-400 mt-1">{step.desc}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        {step.id === 'proposal' && (
-                          <button
-                            onClick={() => handleExecute(step.id)}
-                            disabled={isRunning}
-                            className="text-xs font-bold text-white flex items-center gap-1 bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                          >
-                            {isCompleted ? <RefreshCw className="w-3 h-3" /> : <PlayCircle className="w-3 h-3" />}
-                            {isCompleted ? '重新生成' : '开始执行'}
-                          </button>
-                        )}
                         <button 
                           onClick={() => onNavigate(step.targetTab)}
-                          className="text-xs font-medium text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-500/10 px-3 py-1.5 rounded-lg transition-colors"
+                          className="text-xs font-bold text-white flex items-center gap-1 bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition-colors"
                         >
-                          查看明细
-                          <ArrowRight className="w-3 h-3" />
+                          <PlayCircle className="w-3 h-3" />
+                          前往执行
                         </button>
                       </div>
                     </div>

@@ -30,6 +30,28 @@ async function startServer() {
     }
   });
 
+  app.post("/api/sync-markdown", async (req, res) => {
+    try {
+      const { id, title, markdown } = req.body;
+      if (!id || !markdown) return res.status(400).json({ error: "Missing required fields" });
+
+      const fs = await import("node:fs/promises");
+      const outputDir = path.join(process.cwd(), "outputs");
+      await fs.mkdir(outputDir, { recursive: true }).catch(() => {});
+
+      const safeTitle = (title || "未命名论文").replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, '_');
+      const filename = `${safeTitle}_${id.substring(0, 6)}.md`;
+      const filePath = path.join(outputDir, filename);
+
+      await fs.writeFile(filePath, markdown, "utf-8");
+      
+      res.json({ status: "saved", path: filePath });
+    } catch (error: any) {
+      console.error("Markdown sync error:", error);
+      res.status(500).json({ error: "Failed to sync markdown", details: error.message });
+    }
+  });
+
   app.get("/api/load-theses", async (req, res) => {
     try {
       const fs = await import("node:fs/promises");

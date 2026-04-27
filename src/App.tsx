@@ -29,6 +29,8 @@ import ApiSettingsModal from './components/ApiSettingsModal';
 import StyleManager from './components/StyleManager';
 import GenerationManager from './components/GenerationManager';
 
+import { formatThesisToMarkdown } from './lib/markdown';
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<'project' | 'outline' | 'proposal' | 'editor' | 'literature' | 'audit' | 'styles' | 'generation'>('project');
   const [theses, setTheses] = useState<Thesis[]>([]);
@@ -107,11 +109,22 @@ export default function App() {
       
       const timer = setTimeout(async () => {
         try {
+          // Save total JSON cache
           await fetch('/api/save-theses', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ theses })
           });
+          
+          // Export individual Markdown files
+          for (const t of theses) {
+            const markdown = formatThesisToMarkdown(t);
+            await fetch('/api/sync-markdown', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: t.id, title: t.topic, markdown })
+            });
+          }
         } catch (e) {
           console.error("Server save failed", e);
         }

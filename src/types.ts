@@ -34,8 +34,16 @@ export interface Chapter {
   description?: string;
 }
 
-export interface Proposal {
+export interface ProposalSection {
+  id: string;
+  title: string;
   content: string;
+  status: 'idle' | 'running' | 'success' | 'error';
+}
+
+export interface Proposal {
+  content?: string;
+  sections?: ProposalSection[];
   constraintPrompt: string;
 }
 
