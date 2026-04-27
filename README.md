@@ -1,20 +1,66 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# MEM 论文全生命周期 AI 辅助撰写系统 (v1.0.0 发布说明)
 
-# Run and deploy your AI Studio app
+这是一个专为 **工程管理硕士 (MEM)** 设计的学术论文辅助撰写工具。它不仅提供简单的内容生成，更核心的是通过首创的“**生成管线 (Generation Pipeline)**”实现从选题到正文的全流程逻辑统筹与学术合规性管理。
 
-This contains everything you need to run your app locally.
+## 🌟 本次发布核心特性 (Release Notes)
 
-View your app in AI Studio: https://ai.studio/apps/c73f6d56-074d-42b4-8521-1274f94917db
+- **生成管线管理 (核心)**：首创论文生成全流程节点控制，涵盖：题目 -> 风格 -> 大纲 -> 开题报告 -> 正文。
+- **学术合规性驱动**：深度集成 MEM 学位论文规范，内置逻辑闭环检查与学术化润色引擎。
+- **多模型灵活配置**：原生支持 Google Gemini、OpenAI 以及 **硅基流动 (SiliconFlow)** 聚合平台。
+- **节点级模型覆盖**：允许在生成管线中，针对不同的生成环节单独指定模型与 API Key（例如：大纲阶段使用逻辑较强的 GPT-4o，正文阶段使用对中文学术更友好的 DeepSeek-V3）。
+- **风格克隆技术**：支持上传范文并自动提取学术写作风格，生成具有特定笔触的正文。
 
-## Run Locally
+---
 
-**Prerequisites:**  Node.js
+## 📝 流程节点、上下文提示词 (Context Prompts) 与上下文字数需求 (Context Size)
 
+系统通过不同的“学术专家人格”串联起整个写作流程。由于各环节对理解范围的要求不同，以下列出了每一步的设计细节及**建议的上下文窗口大小**：
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### 1. 题目确定 (Topic)
+- **提示词角色**: `TITLE_GENERATOR` (资深MEM导师视角)
+- **上下文要求**: 深度对标 MEM 选题规范，要求生成的题目具备“理论+对象+管理方向”的三段式结构。
+- **上下文大小预估**: **极小 (约 2K - 4K Tokens)**。
+  - *分析*：仅需处理少量行业设定、研究方向和关键词，任何主流小模型（如 DeepSeek-Chat, Gemini-1.5-Flash）均可无压力且快速胜任。
+
+### 2. 风格提取 (Style)
+- **提示词角色**: `STYLE_EXTRACTOR` (语言学与期刊编辑视角)
+- **上下文要求**: 读取参考文献文本，从“全局基调”、“各章节专门指标（如绪论的背景铺垫节奏、结论的精炼度）”提取出结构化的参考风格指南。
+- **上下文大小预估**: **中到大 (约 32K - 128K Tokens)**。
+  - *分析*：取决于用户投入系统的参考范篇幅。若输入多篇完整的核心期刊文献，极耗上下文。强烈建议使用支持超大上下文窗口的模型（如 Gemini-1.5-Pro 或 DeepSeek-V3 128K版本）。
+
+### 3. 大纲生成 (Outline)
+- **提示词角色**: `STRUCTURE_GENERATOR` (答辩委员会评审专家视角)
+- **上下文要求**: 强制要求“提出问题 -> 分析问题 -> 解决问题 -> 验证效果”的闭环逻辑。针对“案例研究”、“应用研究”、“设计类”三种应用差异化三级架构。
+- **上下文大小预估**: **偏小 (约 8K - 16K Tokens)**。
+  - *分析*：需要结合前期提取的风格设定、用户自定义方向，输出严格的层级树状 JSON 目录。推荐逻辑推理与指令遵从性度高的模型（如 GPT-4o 或 DeepSeek-V3/R1）。
+
+### 4. 开题报告 (Proposal)
+- **提示词角色**: `PROPOSAL_GENERATOR` (基金项目审视专家)
+- **上下文要求**: 根据大纲展开为详细的规划报告。**关键节点**：在输出末尾使用 `<CONSTRAINT>` 标签提炼“**核心逻辑提示词 (Constraint Prompt)**”，此提示词会作为后续所有正文生成的“永久基因定义”，保障全篇核心不偏移。
+- **上下文大小预估**: **中等 (约 16K - 32K Tokens)**。
+  - *分析*：主要考验模型的长文本输出能力（需生成数千字的结构化论述），以及根据输入大纲精准扩写的理解力。
+
+### 5. 正文扩展 (Body)
+- **提示词角色**: `CONTENT_EXPANDER` (高质量学术写手)
+- **上下文要求**: 引入“防 AIGC 检测”防线，通过提升 Perplexity (困惑度) 和 Burstiness (突发性)，破坏 AI 机械、千篇一律的排比句与连接词。
+- **上下文大小预估**: **偏大 (单次生成需求约 32K - 64K Tokens)**。
+  - *分析*：单节生成时，需要囊括：① 包含全篇逻辑的 Constraint Prompt，② 全局大纲结构树，③ 本节专属的文献素材或数据输入。由于需要多次调用，不仅要求上下文窗口足够大，也对成本有要求。这是 **最适合** 挂载本地开源高配模型 或 SiliconFlow 高性价比大模型（DeepSeek）的环节。
+
+---
+
+## 🛠 项目结构与核心修改路径 (Dev Path)
+
+为了支撑以上生成管线设计，对底层架构进行了如下核心开发与修改：
+
+1. **状态结构重构 (`src/types.ts`)**  
+   新增 `GenerationNode` 与 `GenerationStepId` 类型，为每个生成阶段（题目、风格、大纲、开题、正文）绑定状态（idle/running/success/error）与独立的 `customConfig`（支持覆盖全局模型）。
+2. **中心化管线控制台 (`src/components/GenerationManager.tsx`)**  
+   **(全新引入)** 作为整个流程的总控大盘界面。包含进度可视化、直接重分布“提纲至开题”流转指令，并实现节点级独立 API 模型表单配置功能。
+3. **AI 底层服务分发 (`src/services/aiService.ts`)**  
+   重构了由 `AskAI` 驱动的请求发送逻辑，现在支持接受从管线页面传来的 `overrideApiConfig` 拦截器，动态重定向流量（比如：全局 Gemini，单步重载至 OpenAI/SiliconFlow）。囊括了所有学术专家指令 (SYSTEM_PROMPTS)。
+4. **模型支持矩阵扩展 (`src/components/ApiSettingsModal.tsx` & `src/lib/apiConfig.ts`)**  
+   扩展 `ApiConfig` 结构。除了官方 OpenAI、Gemini，原生写入了“硅基流动 SiliconFlow”生态链（DeepSeek-V3, Qwen 等推荐下拉菜单），降低国内用户或性价比优选配置的使用门槛。
+
+---
+
+*本项目为自动化写作提供辅助环境，强烈建议使用者在此平台上进行“人工干预（Human in the loop）”的大纲修订与关键段落重构，以达最高学术水准。*
