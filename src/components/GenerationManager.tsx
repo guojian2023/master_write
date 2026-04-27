@@ -53,6 +53,16 @@ export default function GenerationManager({ thesis, onUpdate, onNavigate }: Gene
       changed = true;
     }
 
+    if (thesis.writingStyle && (!newNodes.style || newNodes.style.status !== 'success')) {
+      newNodes.style = {
+        stepId: 'style',
+        status: 'success',
+        updatedAt: thesis.updatedAt,
+        modelUsed: newNodes.style?.modelUsed || 'User/Setup'
+      };
+      changed = true;
+    }
+
     const hasOutline = thesis.chapters.length > 0;
     if (hasOutline && (!newNodes.outline || newNodes.outline.status !== 'success')) {
       newNodes.outline = { 

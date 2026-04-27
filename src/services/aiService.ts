@@ -136,6 +136,15 @@ export async function testAPI() {
     ) {
         throw new Error("API Key 无效。请检查配置是否正确。");
     }
+
+    if (
+      fullErrString.includes("404") || 
+      fullErrString.includes("NOT_FOUND") || 
+      fullErrString.includes("not found")
+    ) {
+      throw new Error("模型未找到或不可用 (404/NOT_FOUND)。您当前选择的模型可能不支持，请在设置中更换为其它模型 (如 gemini-1.5-flash)。");
+    }
+    
     throw new Error(error.message || "API 测试失败");
   }
 }

@@ -62,9 +62,11 @@ export default function App() {
         const resp = await fetch('/api/load-theses');
         if (resp.ok) {
           const remote = await resp.json();
-          if (Array.isArray(remote) && remote.length > 0) {
+          if (Array.isArray(remote)) {
             setTheses(remote);
-            setActiveThesisId(remote[0].id);
+            if (remote.length > 0) {
+              setActiveThesisId(remote[0].id);
+            }
             remoteLoaded = true;
           }
         }
@@ -77,9 +79,11 @@ export default function App() {
           const saved = localStorage.getItem('mem-theses-list');
           if (saved) {
             const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed) && parsed.length > 0) {
+            if (Array.isArray(parsed)) {
               setTheses(parsed);
-              setActiveThesisId(parsed[0].id);
+              if (parsed.length > 0) {
+                setActiveThesisId(parsed[0].id);
+              }
             }
           } else {
              // Migration from old single thesis format
@@ -91,6 +95,7 @@ export default function App() {
                  if (!parsed.id) parsed.id = crypto.randomUUID();
                  setTheses([parsed]);
                  setActiveThesisId(parsed.id);
+                 localStorage.removeItem('mem-thesis-master'); // prevent zombie
                }
              }
           }
@@ -236,10 +241,25 @@ export default function App() {
                     setActiveTab('outline');
                   }}
                   onDeleteThesis={(id) => {
+                    const tToDelete = theses.find(t => t.id === id);
+                    if (tToDelete) {
+                      fetch('/api/delete-markdown', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: tToDelete.id, title: tToDelete.topic })
+                      }).catch(console.error);
+                    }
+
                     const newTheses = theses.filter(t => t.id !== id);
                     setTheses(newTheses);
+                    
                     if (activeThesisId === id) {
-                      setActiveThesisId(newTheses.length > 0 ? newTheses[0].id : null);
+                      if (newTheses.length > 0) {
+                        setActiveThesisId(newTheses[0].id);
+                      } else {
+                        setActiveThesisId(null);
+                        setActiveTab('project');
+                      }
                     }
                   }}
                   savedStyles={savedStyles}

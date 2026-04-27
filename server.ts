@@ -52,6 +52,27 @@ async function startServer() {
     }
   });
 
+  app.post("/api/delete-markdown", async (req, res) => {
+    try {
+      const { id, title } = req.body;
+      if (!id) return res.status(400).json({ error: "Missing required fields" });
+
+      const fs = await import("node:fs/promises");
+      const outputDir = path.join(process.cwd(), "outputs");
+
+      const safeTitle = (title || "未命名论文").replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, '_');
+      const filename = `${safeTitle}_${id.substring(0, 6)}.md`;
+      const filePath = path.join(outputDir, filename);
+
+      await fs.rm(filePath, { force: true });
+      
+      res.json({ status: "deleted" });
+    } catch (error: any) {
+      console.error("Markdown delete error:", error);
+      res.status(500).json({ error: "Failed to delete markdown" });
+    }
+  });
+
   app.get("/api/load-theses", async (req, res) => {
     try {
       const fs = await import("node:fs/promises");

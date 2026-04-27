@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { FileText, Loader2, Sparkles, CheckCircle2, AlertCircle, PlayCircle, FastForward } from 'lucide-react';
+import { FileText, Loader2, Sparkles, CheckCircle2, AlertCircle, PlayCircle, FastForward, Edit3, X, Check } from 'lucide-react';
 import { Thesis, ProposalSection } from '../types';
 import { askAI, SYSTEM_PROMPTS } from '../services/aiService';
 
@@ -12,12 +12,12 @@ interface ProposalViewProps {
 }
 
 const DEFAULT_SECTIONS = [
-  "一、选题依据与研究背景",
-  "二、国内外研究现状",
-  "三、研究内容与目标",
-  "四、研究方案与方法",
-  "五、研究计划与进度安排",
-  "六、预期成果"
+  { title: "一、选题依据与研究背景", targetWordCount: 800 },
+  { title: "二、国内外研究现状", targetWordCount: 1200 },
+  { title: "三、研究内容与目标", targetWordCount: 1500 },
+  { title: "四、研究方案与方法", targetWordCount: 1500 },
+  { title: "五、研究计划与进度安排", targetWordCount: 500 },
+  { title: "六、预期成果", targetWordCount: 300 }
 ];
 
 export default function ProposalView({ thesis, onUpdate }: ProposalViewProps) {
@@ -29,16 +29,20 @@ export default function ProposalView({ thesis, onUpdate }: ProposalViewProps) {
   const sections = proposal?.sections || [];
   const hasLegacyContent = !!(!sections.length && proposal?.content);
 
+  const [editingWordSectionId, setEditingWordSectionId] = useState<string | null>(null);
+  const [editWordCount, setEditWordCount] = useState<number>(0);
+
   const handleGenerateOutline = async () => {
     setIsGeneratingOutline(true);
     setErrorMsg(null);
     try {
       // In advanced implementation, we could ask AI to generate the sections.
       // Here we use a robust default that aligns with MEM thesis standards.
-      const newSections: ProposalSection[] = DEFAULT_SECTIONS.map((title, i) => ({
+      const newSections: ProposalSection[] = DEFAULT_SECTIONS.map((sec, i) => ({
         id: `p-sec-${Date.now()}-${i}`,
-        title,
+        title: sec.title,
         content: '',
+        targetWordCount: sec.targetWordCount,
         status: 'idle'
       }));
 
@@ -90,11 +94,13 @@ ${outlineStr}
 已完成的开题报告部分（请参考上下文，保持连贯不重复）：
 ${completedContext || '无'}
 
-请为开题报告的【${section.title}】部分撰写详细内容。
+请【仅为】开题报告的【${section.title}】这一个部分撰写详细内容。
 要求：
 1. 必须符合MEM工程管理硕士的要求，专业严谨。
-2. 直接输出正文内容，不要输出标题，不要任何寒暄和多余格式。
-3. 紧扣整个论文大纲。`;
+2. 目标字数须严格控制在约 ${section.targetWordCount || 1000} 字左右。
+3. 直接输出正文内容，不要输出标题，不要任何寒暄和多余格式。
+4. 紧扣此部分的主题，【切勿】擅自撰写其他章节的内容（如无需在"选题依据"中写出"国内外现状"和"预期成果"）。
+5. 确保与上述已完成上下文连贯，不要重复前文已写过的内容。`;
 
       const customConfig = thesis.generationNodes?.['proposal']?.customConfig;
       const apiConfigOverride = customConfig?.enabled ? {
@@ -148,6 +154,22 @@ ${completedContext || '无'}
       }
       setErrorMsg(`生成 ${section.title} 失败: ${e.message || String(e)}`);
     }
+  };
+
+  const handleSaveWordCount = (sectionId: string) => {
+    const freshSections = [...(thesis.proposal?.sections || [])];
+    const targetIndex = freshSections.findIndex(s => s.id === sectionId);
+    if (targetIndex > -1) {
+      freshSections[targetIndex] = {
+        ...freshSections[targetIndex],
+        targetWordCount: editWordCount
+      };
+      onUpdate({
+        ...thesis,
+        proposal: { ...thesis.proposal!, sections: freshSections }
+      });
+    }
+    setEditingWordSectionId(null);
   };
 
   const handleGenerateConstraint = async () => {
@@ -273,7 +295,36 @@ ${fullContent}
               className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg"
             >
               <div className="flex items-center justify-between p-4 bg-slate-800/30 border-b border-slate-800">
-                <h3 className="font-bold text-slate-200 text-sm">{sec.title}</h3>
+                <div className="flex items-center gap-3">
+                  <h3 className="font-bold text-slate-200 text-sm">{sec.title}</h3>
+                  {editingWordSectionId === sec.id ? (
+                    <div className="flex items-center gap-1 bg-slate-900 px-2 py-1 rounded-md border border-slate-700">
+                      <span className="text-xs text-slate-500">目标字数:</span>
+                      <input 
+                        type="number" 
+                        value={editWordCount}
+                        onChange={(e) => setEditWordCount(Number(e.target.value))}
+                        className="w-16 bg-transparent text-xs text-white border-b border-blue-500 outline-none text-center"
+                        autoFocus
+                      />
+                      <button onClick={() => handleSaveWordCount(sec.id)} className="text-emerald-400 hover:text-emerald-300 p-0.5"><Check className="w-3 h-3" /></button>
+                      <button onClick={() => setEditingWordSectionId(null)} className="text-slate-400 hover:text-slate-300 p-0.5"><X className="w-3 h-3" /></button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 group/word">
+                      <span className="text-xs text-slate-500 bg-slate-900 px-2 py-1 rounded-md border border-slate-800">目标字数: ~{sec.targetWordCount || 1000}</span>
+                      <button 
+                        onClick={() => {
+                          setEditingWordSectionId(sec.id);
+                          setEditWordCount(sec.targetWordCount || 1000);
+                        }}
+                        className="text-slate-500 hover:text-blue-400 opacity-0 group-hover/word:opacity-100 transition-opacity"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
                 
                 <div className="flex items-center gap-3">
                   {sec.status === 'success' && <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded uppercase tracking-wider font-bold">已完成</span>}

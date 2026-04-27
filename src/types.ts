@@ -38,6 +38,7 @@ export interface ProposalSection {
   id: string;
   title: string;
   content: string;
+  targetWordCount?: number;
   status: 'idle' | 'running' | 'success' | 'error';
 }
 
