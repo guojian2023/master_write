@@ -39,6 +39,23 @@ export interface Proposal {
   constraintPrompt: string;
 }
 
+export type GenerationStepId = 'topic' | 'style' | 'outline' | 'proposal' | 'body';
+
+export interface GenerationNode {
+  stepId: GenerationStepId;
+  status: 'idle' | 'running' | 'success' | 'error';
+  modelUsed?: string;
+  updatedAt?: string;
+  errorMessage?: string;
+  customConfig?: {
+    enabled: boolean;
+    platform: 'gemini' | 'openai' | 'siliconflow' | 'custom';
+    model: string;
+    baseUrl?: string;
+    apiKey?: string;
+  };
+}
+
 export interface Thesis {
   id: string;
   topic: string;
@@ -51,6 +68,7 @@ export interface Thesis {
   targetTotalWords?: number;
   writingStyle?: string;
   proposal?: Proposal;
+  generationNodes?: Partial<Record<GenerationStepId, GenerationNode>>;
   updatedAt: string;
 }
 

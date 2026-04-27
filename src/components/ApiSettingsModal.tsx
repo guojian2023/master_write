@@ -77,25 +77,34 @@ export default function ApiSettingsModal({ isOpen, onClose }: ApiSettingsModalPr
           {/* Platform */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-300">AI 平台</label>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { id: 'gemini', label: 'Google Gemini' },
-                { id: 'openai', label: 'OpenAI' },
-                { id: 'custom', label: '自定义 / 多模型' },
+                { id: 'openai', label: 'OpenAI / DeepSeek' },
+                { id: 'siliconflow', label: '硅基流动 (SiliconFlow)' },
+                { id: 'custom', label: '自定义兼容接口' },
               ].map((p) => (
                 <button
                   key={p.id}
                   onClick={() => {
                     const newPlatform = p.id as any;
                     let defaultModel = config.model;
-                    if (newPlatform === 'gemini') defaultModel = 'gemini-1.5-flash';
+                    let defaultBaseUrl = config.baseUrl;
+                    if (newPlatform === 'gemini') {
+                      defaultModel = 'gemini-1.5-flash';
+                      defaultBaseUrl = '';
+                    }
                     else if (newPlatform === 'openai') defaultModel = 'gpt-4o-mini';
-                    else if (newPlatform === 'custom') defaultModel = 'deepseek-chat';
+                    else if (newPlatform === 'siliconflow') {
+                      defaultModel = 'deepseek-ai/DeepSeek-V3';
+                      defaultBaseUrl = 'https://api.siliconflow.cn/v1';
+                    }
+                    else if (newPlatform === 'custom') defaultModel = '';
                     
-                    setConfig({ ...config, platform: newPlatform, model: defaultModel });
+                    setConfig({ ...config, platform: newPlatform, model: defaultModel, baseUrl: defaultBaseUrl });
                   }}
                   className={cn(
-                    "px-3 py-2.5 rounded-lg text-sm font-medium border transition-colors flex items-center justify-center",
+                    "px-3 py-2.5 rounded-lg text-xs sm:text-sm font-medium border transition-colors flex items-center justify-center text-center",
                     config.platform === p.id 
                       ? "bg-blue-600/20 border-blue-500/50 text-blue-400" 
                       : "bg-slate-800/50 border-slate-700/50 text-slate-400 hover:bg-slate-800"
@@ -125,13 +134,25 @@ export default function ApiSettingsModal({ isOpen, onClose }: ApiSettingsModalPr
                 <option value="gemini-1.5-pro">gemini-1.5-pro (经典推理模型)</option>
                 <option value="gemini-1.5-flash">gemini-1.5-flash (经典快速模型)</option>
               </select>
+            ) : config.platform === 'siliconflow' ? (
+              <select
+                value={config.model}
+                onChange={(e) => setConfig({ ...config, model: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all appearance-none"
+              >
+                <option value="deepseek-ai/DeepSeek-V3">DeepSeek V3 (性价比极高，推荐)</option>
+                <option value="deepseek-ai/DeepSeek-R1">DeepSeek R1 (深度思考)</option>
+                <option value="Qwen/Qwen2.5-72B-Instruct">Qwen 2.5 72B Instruct</option>
+                <option value="Pro/deepseek-ai/DeepSeek-V3">DeepSeek V3 Pro (更高稳定性)</option>
+                <option value="Pro/deepseek-ai/DeepSeek-R1">DeepSeek R1 Pro (稳定理科)</option>
+              </select>
             ) : (
               <input
                 type="text"
                 value={config.model}
                 onChange={(e) => setConfig({ ...config, model: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-slate-600"
-                placeholder={config.platform === 'gemini' ? 'gemini-1.5-pro' : 'gpt-4o'}
+                placeholder={config.platform === 'openai' ? 'gpt-4o / deepseek-chat' : '如: gpt-3.5-turbo'}
               />
             )}
           </div>

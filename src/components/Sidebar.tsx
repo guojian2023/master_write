@@ -8,7 +8,8 @@ import {
   Target,
   Library,
   Settings,
-  Sparkles
+  Sparkles,
+  PlayCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -22,6 +23,7 @@ interface SidebarProps {
 export default function Sidebar({ activeTab, setActiveTab, hasProject, onOpenSettings }: SidebarProps) {
   const menuItems = [
     { id: 'project', label: '项目列表', icon: Target },
+    { id: 'generation', label: '生成管线', icon: PlayCircle, disabled: !hasProject },
     { id: 'styles', label: '写作风格', icon: Sparkles },
     { id: 'outline', label: '大纲管理', icon: Layout, disabled: !hasProject },
     { id: 'proposal', label: '开题报告', icon: FileText, disabled: !hasProject },

@@ -2,8 +2,8 @@ import { Thesis } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import { getApiConfig } from '../lib/apiConfig';
 
-async function generateContentWithConfig(prompt: string, configObj?: any): Promise<string> {
-  const config = getApiConfig();
+async function generateContentWithConfig(prompt: string, configObj?: any, overrideApiConfig?: any): Promise<string> {
+  const config = overrideApiConfig || getApiConfig();
   const apiKey = config.apiKey || process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -24,12 +24,16 @@ async function generateContentWithConfig(prompt: string, configObj?: any): Promi
     }
     return response.text;
   } else {
-    // OpenAI or Custom REST API
+    // OpenAI, SiliconFlow or Custom REST API
     let baseUrl = config.baseUrl;
     if (!baseUrl) {
-      baseUrl = config.platform === 'openai' 
-        ? "https://api.openai.com/v1" 
-        : "https://api.openai.com/v1"; // fallback
+      if (config.platform === 'siliconflow') {
+        baseUrl = "https://api.siliconflow.cn/v1";
+      } else {
+        baseUrl = config.platform === 'openai' 
+          ? "https://api.openai.com/v1" 
+          : "https://api.openai.com/v1"; // fallback
+      }
     }
     // Remove trailing slash
     baseUrl = baseUrl.replace(/\/$/, "");
@@ -67,12 +71,12 @@ async function generateContentWithConfig(prompt: string, configObj?: any): Promi
   }
 }
 
-export async function askAI(prompt: string, systemInstruction: string) {
+export async function askAI(prompt: string, systemInstruction: string, overrideApiConfig?: any) {
   try {
     return await generateContentWithConfig(prompt, {
       systemInstruction: systemInstruction,
       temperature: 0.7,
-    });
+    }, overrideApiConfig);
   } catch (error: any) {
     console.error("AI Service Error:", error);
     const errString = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
@@ -83,7 +87,7 @@ export async function askAI(prompt: string, systemInstruction: string) {
       fullErrString.includes("RESOURCE_EXHAUSTED") || 
       fullErrString.includes("quota")
     ) {
-      throw new Error("API 额度已耗尽 (429)。请尝试在左下角设置中更换为更小的模型（如 gemini-2.0-flash-lite / gemini-1.5-flash），或换用您自己的 API Key。");
+      throw new Error("API 额度已耗尽 (429)。免费版 Gemini API 限制为 15次请求/分钟 或 1000次/天。请稍候重试，或在左下角换用您自己的 API Key (推荐配置 SiliconFlow / DeepSeek 以获取更大额度)。");
     }
 
     if (
@@ -120,7 +124,7 @@ export async function testAPI() {
         throw new Error("API Key 未配置。");
     }
     await generateContentWithConfig("Hello, please return exactly the word: 'OK'");
-    return `API 测试成功！模型配置 (${config.model || 'gemini-1.5-flash'}) 正常。`;
+    return `API 测试成功！配置已可调用 (${config.model || 'gemini-1.5-flash'})。`;
   } catch (error: any) {
     console.error("API Test Error:", error);
     const errString = error instanceof Error ? `${error.name}: ${error.message}` : String(error);

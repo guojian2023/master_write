@@ -1,5 +1,5 @@
 export interface ApiConfig {
-  platform: 'gemini' | 'openai' | 'custom';
+  platform: 'gemini' | 'openai' | 'siliconflow' | 'custom';
   apiKey: string;
   baseUrl: string;
   model: string;
@@ -9,7 +9,7 @@ export const DEFAULT_CONFIG: ApiConfig = {
   platform: 'gemini',
   apiKey: '',
   baseUrl: '',
-  model: 'gemini-2.5-flash',
+  model: 'gemini-1.5-flash',
 };
 
 const STORAGE_KEY = 'mem_thesis_api_config';

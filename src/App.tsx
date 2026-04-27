@@ -27,9 +27,10 @@ import AuditView from './components/AuditView';
 import LiteratureManager from './components/LiteratureManager';
 import ApiSettingsModal from './components/ApiSettingsModal';
 import StyleManager from './components/StyleManager';
+import GenerationManager from './components/GenerationManager';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'project' | 'outline' | 'proposal' | 'editor' | 'literature' | 'audit' | 'styles'>('project');
+  const [activeTab, setActiveTab] = useState<'project' | 'outline' | 'proposal' | 'editor' | 'literature' | 'audit' | 'styles' | 'generation'>('project');
   const [theses, setTheses] = useState<Thesis[]>([]);
   const [savedStyles, setSavedStyles] = useState<WritingStyle[]>([]);
   const [activeThesisId, setActiveThesisId] = useState<string | null>(null);
@@ -313,6 +314,22 @@ export default function App() {
                 exit={{ opacity: 0 }}
               >
                 <AuditView thesis={thesis} onUpdate={updateThesis} />
+              </motion.div>
+            )}
+
+            {thesis && activeTab === 'generation' && (
+              <motion.div
+                key="generation"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="h-full"
+              >
+                <GenerationManager 
+                  thesis={thesis} 
+                  onUpdate={updateThesis} 
+                  onNavigate={setActiveTab}
+                />
               </motion.div>
             )}
           </AnimatePresence>
