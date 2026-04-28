@@ -75,6 +75,7 @@ export interface Thesis {
   solutions: string[]; // Proposed solutions
   citations: Citation[];
   targetTotalWords?: number;
+  totalTokensUsed?: number;
   writingStyle?: string;
   proposal?: Proposal;
   generationNodes?: Partial<Record<GenerationStepId, GenerationNode>>;

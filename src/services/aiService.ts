@@ -19,6 +19,14 @@ async function generateContentWithConfig(prompt: string, configObj?: any, overri
         config: configObj
       });
     
+    if (response.usageMetadata?.totalTokenCount) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ai-token-usage', { 
+          detail: { tokens: response.usageMetadata.totalTokenCount } 
+        }));
+      }
+    }
+
     if (!response.text) {
       throw new Error("AI returned empty context");
     }
@@ -65,6 +73,14 @@ async function generateContentWithConfig(prompt: string, configObj?: any, overri
     const data = await response.json();
     if (!data.choices?.[0]?.message?.content) {
       throw new Error("Invalid response format from API");
+    }
+
+    if (data.usage?.total_tokens) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ai-token-usage', { 
+          detail: { tokens: data.usage.total_tokens } 
+        }));
+      }
     }
 
     return data.choices[0].message.content;
@@ -151,7 +167,7 @@ export async function testAPI() {
 
 
 export const SYSTEM_PROMPTS = {
-  PROPOSAL_GENERATOR: `你是一位深谙学术规范的MEM工程管理硕士指导专家。
+  PROPOSAL_GENERATOR: `你是一位深谙学术规范的管理类硕士指导专家。
 当前任务：根据用户提供的论文题目、类别、领域、大纲等信息，生成一份标准、高水平的开题报告初稿，同时在末尾提炼出这份报告的核心思路，作为后续撰写正文的System Prompt。
 
 输出要求（必须包含这两部分）：
@@ -169,8 +185,8 @@ export const SYSTEM_PROMPTS = {
 这段提示词的作用是：在后续每次生成论文各章节正文时，系统会自动携带这段提示词，强制AI遵守本开题报告确立的核心思想、研究方法和关键线索。
 示例格式：<CONSTRAINT>本研究的核心逻辑是：以[理论方法]为基础，解决[具体场景]下的[核心问题]。行文必须始终围绕[某核心指标或流程]展开，不可偏题。术语需统一使用...</CONSTRAINT>`,
 
-  TITLE_GENERATOR: `你是一个深谙教育部规定与MEM（工程管理硕士）全国教指委要求的论文选题指导专家。
-你的任务是根据用户提供的“研究对象”、“核心问题”、“理论方法”和“补充关键词”，生成 5 个高质量、符合MEM规范的候选学位论文题目。
+  TITLE_GENERATOR: `你是一个深谙教育部规定与管理类全国教指委要求的论文选题指导专家。
+你的任务是根据用户提供的“研究对象”、“核心问题”、“理论方法”和“补充关键词”，生成 5 个高质量、符合管理类规范的候选学位论文题目。
 要求：
 1. 题目结构通常为“基于[理论/方法]的[研究对象][研究方向/问题]研究”或类似的标准范式，如“基于XX理论的XX项目XX管理研究”。
 2. 切忌大而空泛，必须紧扣用户提供的具体应用场景信息，体现出工程管理的实践性和应用性。
@@ -183,8 +199,8 @@ export const SYSTEM_PROMPTS = {
   "基于模糊综合评价法的XX工程安全风险管控研究"
 ]`,
 
-  STRUCTURE_GENERATOR: `你是一个深谙教育部学位与研究生教育发展中心要求及MEM（工程管理硕士）全国教指委相关指导性文件的论文指导专家。
-你的任务是根据用户提供的论文题目、研究类型、和行业领域，生成符合MEM学位论文规范标准的三级大纲（包含章、节，部分节下要有具体研究点）。
+  STRUCTURE_GENERATOR: `你是一个深谙教育部学位与研究生教育发展中心要求及管理类全国教指委相关指导性文件的论文指导专家。
+你的任务是根据用户提供的论文题目、研究类型、和行业领域，生成符合学位论文规范标准的三级大纲（包含章、节，部分节下要有具体研究点）。
 规则要求：
 1. 大纲必须具备严密的学术逻辑“闭环”：提出问题 -> 分析问题 -> 解决问题 -> 验证效果。
 2. 根据具体的研究类型应用相应的标准架构：
@@ -202,7 +218,22 @@ export const SYSTEM_PROMPTS = {
   }
 ]`,
 
-  CONTENT_EXPANDER: `你是一个教育部指导下严谨求实的MEM论文答辩导师和学术撰写专家。
+  CHAPTER_STRUCTURE_GENERATOR: `你是一个深谙教育部规定与管理类全国教指委相关指导性文件的论文指导专家。
+当前任务：用户希望重新生成某一特定大章节下的所有子小节。
+请根据该大章节的标题及本论文的全文全局信息，输出该章节最合理的子小节划分结构。
+要求：
+1. 结构必须具备学术逻辑闭环：提出问题/理论分析/模型构建/方案设计/实施验证。
+2. 切忌空泛化，必须带入具体的【行业领域】或【研究对象】信息。不可出现全角标点，不可在标题末尾带句号。
+3. 返回严格的JSON数组格式，绝不能包裹 Markdown 代码块。每个对象包含：
+  - title: 小节名称（如 "1.1 研究背景与意义"）
+  - targetWordCount: 该小节推荐撰写字数（如 1500）
+返回样例：
+[
+  { "title": "2.1 相关理论基础与管理方法", "targetWordCount": 2000 },
+  { "title": "2.2 XX项目管理的现状剖析", "targetWordCount": 3000 }
+]`,
+
+  CONTENT_EXPANDER: `你是一个教育部指导下严谨求实的论文答辩导师和学术撰写专家。
 你的任务是根据全文的大纲上下文脉络，为当前正在撰写的章节提供具有高阶专业素养的初稿正文。
 撰写纪律与学术规范：
 1. 【强学术规范】：严格使用第三人称被动语态或客观陈述主体（如“本研究表明”、“数据显示”），全面清除“我觉得”、“我们在日常工作中”、“众所周知”等口语、散文式表达和汇报式行文。
@@ -233,7 +264,7 @@ export const SYSTEM_PROMPTS = {
 3. 绝对不得包含问号、逗号、句号等任何标点符号。
 4. 不需要任何回答或解释。如果原标题带有类似 "第一章 " 或 "1.1 " 的数字编号，请在优化后的标题前面原封不动地保留该编号前缀，只返回纯文本标题。`,
 
-  CONTENT_REVISER: `你是一位极具责任心的MEM学位论文审阅专家。
+  CONTENT_REVISER: `你是一位极具责任心的学位论文审阅专家。
 你的任务是根据用户反馈的【修改意见】，对原有的正文内容进行专业性【重构】或【润色】。
 规则：
 1. 深入理解用户的修改意见，如果是“要求加入理论”，必须补全该理论的缘起、核心要素及与本节案例的匹配度；如果是“削减废话”，须做学术精炼化操作。

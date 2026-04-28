@@ -37,7 +37,7 @@ export default function ProposalView({ thesis, onUpdate }: ProposalViewProps) {
     setErrorMsg(null);
     try {
       // In advanced implementation, we could ask AI to generate the sections.
-      // Here we use a robust default that aligns with MEM thesis standards.
+      // Here we use a robust default that aligns with management thesis standards.
       const newSections: ProposalSection[] = DEFAULT_SECTIONS.map((sec, i) => ({
         id: `p-sec-${Date.now()}-${i}`,
         title: sec.title,
@@ -96,8 +96,8 @@ ${completedContext || '无'}
 
 请【仅为】开题报告的【${section.title}】这一个部分撰写详细内容。
 要求：
-1. 必须符合MEM工程管理硕士的要求，专业严谨。
-2. 目标字数须严格控制在约 ${section.targetWordCount || 1000} 字左右。
+1. 必须符合管理类硕士的要求，专业严谨。
+2. 目标字数须严格控制在约 ${section.targetWordCount || 1000} 字左右（允许±10%误差）。这是硬性约束，请务必保证字数达标！
 3. 直接输出正文内容，不要输出标题，不要任何寒暄和多余格式。
 4. 紧扣此部分的主题，【切勿】擅自撰写其他章节的内容（如无需在"选题依据"中写出"国内外现状"和"预期成果"）。
 5. 确保与上述已完成上下文连贯，不要重复前文已写过的内容。`;
@@ -211,33 +211,74 @@ ${fullContent}
     }
   };
 
+  const totalWords = hasLegacyContent && proposal?.content 
+    ? proposal.content.length 
+    : sections.reduce((acc, s) => acc + (s.content?.length || 0), 0);
+
+  const handleExport = () => {
+    let content = `# 开题报告：${thesis.topic}\n\n`;
+    if (hasLegacyContent) {
+      content += proposal!.content!;
+    } else {
+      sections.forEach(s => {
+        content += `## ${s.title}\n\n${s.content || ''}\n\n`;
+      });
+    }
+
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `开题报告_${thesis.topic}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-black tracking-tight text-white flex items-center gap-3">
-          <FileText className="w-6 h-6 text-indigo-400" />
-          开题报告
-        </h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-2xl font-black tracking-tight text-white flex items-center gap-3">
+            <FileText className="w-6 h-6 text-indigo-400" />
+            开题报告
+          </h2>
+          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 shadow-inner">
+            <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">总字数</span>
+            <span className="text-sm font-mono text-emerald-400 font-bold">{totalWords}</span>
+          </div>
+        </div>
         
-        {(!sections.length && !hasLegacyContent) ? (
-          <button
-            onClick={handleGenerateOutline}
-            disabled={isGeneratingOutline}
-            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-indigo-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isGeneratingOutline ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            生成开题大纲
-          </button>
-        ) : (
-          <button
-            onClick={handleGenerateConstraint}
-            disabled={isGeneratingConstraint || (!hasLegacyContent && sections.every(s => !s.content))}
-            className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isGeneratingConstraint ? <Loader2 className="w-4 h-4 animate-spin" /> : <FastForward className="w-4 h-4" />}
-            提炼核心约束设定
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {(!sections.length && !hasLegacyContent) ? (
+            <button
+              onClick={handleGenerateOutline}
+              disabled={isGeneratingOutline}
+              className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-indigo-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGeneratingOutline ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              生成开题大纲
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={handleGenerateConstraint}
+                disabled={isGeneratingConstraint || (!hasLegacyContent && sections.every(s => !s.content))}
+                className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGeneratingConstraint ? <Loader2 className="w-4 h-4 animate-spin" /> : <FastForward className="w-4 h-4" />}
+                提炼核心约束设定
+              </button>
+              <button
+                onClick={handleExport}
+                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-blue-500/20 active:scale-95 disabled:opacity-50"
+              >
+                导出报告
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="text-sm text-slate-400 max-w-3xl">
@@ -313,6 +354,7 @@ ${fullContent}
                   ) : (
                     <div className="flex items-center gap-2 group/word">
                       <span className="text-xs text-slate-500 bg-slate-900 px-2 py-1 rounded-md border border-slate-800">目标字数: ~{sec.targetWordCount || 1000}</span>
+                      <span className={`text-xs px-2 py-1 rounded-md border ${sec.content?.length > 0 ? (Math.abs(sec.content.length - (sec.targetWordCount || 1000)) > (sec.targetWordCount || 1000)*0.2 ? 'text-amber-400 border-amber-400/30 bg-amber-400/10' : 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10') : 'text-slate-500 border-slate-800 bg-slate-900'}`}>已写字数: {sec.content?.length || 0}</span>
                       <button 
                         onClick={() => {
                           setEditingWordSectionId(sec.id);

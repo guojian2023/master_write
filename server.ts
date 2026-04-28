@@ -78,9 +78,89 @@ async function startServer() {
       const fs = await import("node:fs/promises");
       const filePath = path.join(process.cwd(), "theses_data.json");
       const data = await fs.readFile(filePath, "utf-8");
-      res.json(JSON.parse(data));
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return res.json(parsed);
+      }
+      throw new Error("Empty theses data");
     } catch (error) {
-      res.status(200).json([]); // Return empty array if not found
+      // Fallback to a default, persistent test data
+      const defaultTestData = [
+        {
+          id: "test-thesis-id-001",
+          topic: "新能源汽车动力电池回收网络的规划与设计策略研究（系统测试示例）",
+          researchType: "special",
+          field: "新能源环保与供应链管理",
+          targetTotalWords: 30000,
+          generationNodes: {
+             topic: { stepId: "topic", status: "success", modelUsed: "User/Setup", updatedAt: new Date().toISOString() },
+             style: { stepId: "style", status: "success", modelUsed: "User/Setup", updatedAt: new Date().toISOString() },
+             outline: { stepId: "outline", status: "success", modelUsed: "Auto", updatedAt: new Date().toISOString() },
+             proposal: { stepId: "proposal", status: "success", modelUsed: "Auto", updatedAt: new Date().toISOString() }
+          },
+          updatedAt: new Date().toISOString(),
+          problems: ["回收网络不完善", "成本极高"],
+          solutions: ["优化逆向物流网络", "区域回收中心设计"],
+          citations: [],
+          proposal: {
+            constraintPrompt: "以工程管理硕士（MEM）视角，提出优化动力电池回收网络降低整体成本方案。",
+            sections: [
+              {
+                id: "p-sec-1",
+                title: "一、选题依据与研究背景",
+                targetWordCount: 800,
+                status: "success",
+                content: "随着新能源汽车产业的迅猛发展，动力电池的退役潮已经到来。建立科学高效的动力电池回收网络已成为我国可持续发展战略的重要一环。当前的痛点在于..."
+              },
+              {
+                id: "p-sec-2",
+                title: "二、研究内容与目标",
+                targetWordCount: 1500,
+                status: "success",
+                content: "本研究旨在分析当前退役动力电池逆向物流网络现状的基础上，通过建立网络规划数学模型，设计出兼顾经济性和环保性的区域回收网络方案..."
+              }
+            ]
+          },
+          chapters: [
+            {
+              id: "c-1",
+              title: "第一章 绪论",
+              description: "本章主要介绍研究背景、目的意义及国内外相关研究进展。",
+              sections: [
+                {
+                  id: "c-1-s-1",
+                  title: "1.1 研究背景及意义",
+                  targetWordCount: 1500,
+                  status: "complete",
+                  content: "新能源汽车的产销量在过去十年中实现了爆发式增长。这不仅带动了相关产业链的发展，也带来了一系列环境与资源问题..."
+                },
+                {
+                  id: "c-1-s-2",
+                  title: "1.2 国内外研究现状",
+                  targetWordCount: 2000,
+                  status: "complete",
+                  content: "学术界关于动力电池回收与逆向物流网络的研究主要集中在如下几个方面。从理论基础来看..."
+                }
+              ]
+            },
+            {
+              id: "c-2",
+              title: "第二章 动力电池回收逆向物流网络现状分析",
+              description: "深入分析当前行业的痛点",
+              sections: [
+                {
+                  id: "c-2-s-1",
+                  title: "2.1 回收模式现状分析",
+                  targetWordCount: 3000,
+                  status: "empty",
+                  content: ""
+                }
+              ]
+            }
+          ]
+        }
+      ];
+      res.status(200).json(defaultTestData);
     }
   });
 

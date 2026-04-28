@@ -1,6 +1,6 @@
 {
-  "name": "(MEM论文全生命周期辅助应用)",
-  "description": "专业工程管理硕士（MEM）论文辅助撰写工具，支持自动构建逻辑架构、AI学术化续写、逻辑合规性审计及“逻辑闭环”检查。",
+  "name": "管理类论文专家",
+  "description": "专业管理类论文辅助撰写工具，支持自动构建逻辑架构、AI学术化续写、逻辑合规性审计及“逻辑闭环”检查。",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

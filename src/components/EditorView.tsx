@@ -112,7 +112,7 @@ export default function EditorView({ thesis, onUpdate, initialSectionId }: Edito
       const proposalConstraint = thesis.proposal?.constraintPrompt ? `\n[开题报告核心约束]\n${thesis.proposal.constraintPrompt}\n系统要求：生成全文初稿或扩写时，务必将上述核心理念贯彻始终，确保不偏题。` : '';
       const prompt = `
 论文题目：${thesis.topic}
-研究类型：MEM（工程管理硕士）
+研究类型：管理类
 行业领域：${thesis.field}
 
 [论文全局大纲]

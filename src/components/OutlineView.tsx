@@ -8,7 +8,8 @@ import {
   ArrowRightCircle,
   Sparkles,
   Check,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Thesis, Chapter, Section } from '../types';
@@ -55,7 +56,7 @@ export default function OutlineView({ thesis, onUpdate, onSelectSection }: Outli
              const styleInstruction = thesis.writingStyle ? `\n5. 【强制独有写作风格】：\n${thesis.writingStyle}` : '';
              const prompt = `
 论文题目：${newThesis.topic}
-研究类型：MEM（工程管理硕士）
+研究类型：管理类
 行业领域：${newThesis.field}
 
 [全局大纲结构]
@@ -106,6 +107,110 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
     newChapters[cIdx].sections[sIdx].targetWordCount = editTargetWordCount;
     onUpdate({ ...thesis, chapters: newChapters });
     setEditingTargetWordSectionId(null);
+  };
+
+  const [confirmDelete, setConfirmDelete] = useState<{type: 'chapter'|'section', cIdx: number, sIdx?: number} | null>(null);
+
+  const handleAddSection = (cIdx: number) => {
+    const newChapters = thesis.chapters.map((c, index) => {
+      if (index === cIdx) {
+        return {
+          ...c,
+          sections: [
+            ...c.sections,
+            {
+              id: `c-${cIdx + 1}-s-${c.sections.length + 1}-${Date.now()}`,
+              title: '新建子章节',
+              status: 'empty',
+              content: '',
+              targetWordCount: Math.floor(getTargetWords(cIdx)/3) || 1000
+            }
+          ]
+        };
+      }
+      return c;
+    });
+    
+    onUpdate({ ...thesis, chapters: newChapters });
+  };
+
+  const executeDelete = () => {
+    if (!confirmDelete) return;
+    
+    const { type, cIdx, sIdx } = confirmDelete;
+    let newChapters = [...thesis.chapters];
+    
+    if (type === 'chapter') {
+      newChapters.splice(cIdx, 1);
+    } else if (type === 'section' && sIdx !== undefined) {
+      newChapters = newChapters.map((c, index) => {
+        if (index === cIdx) {
+          const newSections = [...c.sections];
+          newSections.splice(sIdx, 1);
+          return { ...c, sections: newSections };
+        }
+        return c;
+      });
+    }
+    
+    onUpdate({ ...thesis, chapters: newChapters });
+    setConfirmDelete(null);
+  };
+
+  const handleDeleteSection = (cIdx: number, sIdx: number) => {
+    setConfirmDelete({ type: 'section', cIdx, sIdx });
+  };
+
+  const handleAddChapter = () => {
+    const newChapters = [...thesis.chapters];
+    const newChapterId = `c-${newChapters.length + 1}-${Date.now()}`;
+    newChapters.push({
+      id: newChapterId,
+      title: '新建章节',
+      description: '',
+      sections: []
+    });
+    onUpdate({ ...thesis, chapters: newChapters });
+  };
+
+  const handleDeleteChapter = (cIdx: number) => {
+    setConfirmDelete({ type: 'chapter', cIdx });
+  };
+
+  const handleRegenerateChapterSections = async (cIdx: number) => {
+    if (!window.confirm("重新生成将覆盖该章节当前的所有小节，确定要继续吗？")) return;
+    setOptimizingId(thesis.chapters[cIdx].id); // Reuse optimizingId for loading state
+    
+    try {
+      const prompt = `论文题目：${thesis.topic}\n研究类型：${thesis.researchType}\n所在领域：${thesis.field}\n
+开题报告关键约束：${thesis.proposal?.constraintPrompt || '无'}
+大章节标题：${thesis.chapters[cIdx].title}
+大章节介绍：${thesis.chapters[cIdx].description || '无'}
+请生成该大章节下的子小节（JSON数组格式）。`;
+
+      const jsonStr = await askAI(prompt, SYSTEM_PROMPTS.CHAPTER_STRUCTURE_GENERATOR);
+      const jsonMatch = jsonStr.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error("Format error from AI");
+      
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (!Array.isArray(parsed)) throw new Error("Not an array");
+
+      const newChapters = [...thesis.chapters];
+      newChapters[cIdx].sections = parsed.map((item: any, i: number) => ({
+        id: `c-${cIdx + 1}-s-${i + 1}-${Date.now()}`,
+        title: item.title,
+        status: 'empty',
+        content: '',
+        targetWordCount: item.targetWordCount || 1000
+      }));
+      
+      onUpdate({ ...thesis, chapters: newChapters });
+    } catch (e: any) {
+      console.error(e);
+      alert("重新生成失败：" + (e.message || "未知错误"));
+    } finally {
+      setOptimizingId(null);
+    }
   };
 
   const handleSaveChapter = (cIdx: number) => {
@@ -330,6 +435,21 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
                         >
                           <Sparkles className={cn("w-4 h-4", optimizingId === chapter.id && "animate-pulse")} />
                         </button>
+                        <button
+                          onClick={() => handleRegenerateChapterSections(cIdx)}
+                          disabled={optimizingId === chapter.id}
+                          className="p-1.5 text-emerald-500/70 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-colors relative"
+                          title="重新生成该章节下小节"
+                        >
+                          <RefreshCw className={cn("w-4 h-4", optimizingId === chapter.id && "animate-spin")} />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDeleteChapter(cIdx); }}
+                          className="p-1.5 text-red-500/70 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                          title="删除章节"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                     <span className="label-caps opacity-50">第 {cIdx + 1} 章 · 建议字数: {getTargetWords(cIdx).toLocaleString()}</span>
@@ -366,6 +486,13 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
                         title="AI 优化标题"
                       >
                         <Sparkles className={cn("w-3.5 h-3.5", optimizingId === section.id && "animate-pulse")} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteSection(cIdx, sIdx); }}
+                        className="p-1 hover:text-red-400 hover:bg-red-500/10 rounded text-red-500/70"
+                        title="删除子章节"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                       <ArrowRightCircle className="w-5 h-5 text-slate-600 group-hover:text-blue-500 transition-colors ml-1" />
                     </div>
@@ -444,7 +571,7 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
                 </motion.div>
               ))}
               
-              <button className="border-2 border-dashed border-slate-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 text-slate-600 hover:text-blue-400 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all group">
+              <button onClick={() => handleAddSection(cIdx)} className="border-2 border-dashed border-slate-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 text-slate-600 hover:text-blue-400 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all group min-h-[160px]">
                 <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center group-hover:bg-blue-500/10 group-hover:text-blue-400 transition-all">
                   <Plus className="w-5 h-5" />
                 </div>
@@ -453,7 +580,42 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
             </div>
           </section>
         ))}
+
+        <div className="flex justify-center mt-12 mb-8">
+          <button 
+            onClick={handleAddChapter}
+            className="flex items-center gap-2 px-8 py-3 bg-slate-900 border border-slate-700 hover:border-blue-500/50 hover:bg-blue-500/10 text-slate-300 hover:text-blue-400 text-sm font-bold rounded-xl transition-all shadow-lg active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            添加新章节
+          </button>
+        </div>
       </div>
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4">
+            <h3 className="text-xl font-bold text-white mb-2">确认删除</h3>
+            <p className="text-slate-400 text-sm mb-6">
+              {confirmDelete.type === 'chapter' ? '确定要删除该章节及其所有子章节吗？此操作不可撤销。' : '确定要删除该子章节吗？此操作不可撤销。'}
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button 
+                onClick={() => setConfirmDelete(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                取消
+              </button>
+              <button 
+                onClick={executeDelete}
+                className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors"
+              >
+                确定删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

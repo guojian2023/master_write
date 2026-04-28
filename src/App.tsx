@@ -157,6 +157,21 @@ export default function App() {
     localStorage.setItem('mem-saved-styles', JSON.stringify(savedStyles));
   }, [savedStyles]);
 
+  useEffect(() => {
+    const handleTokenUsage = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (activeThesisId && customEvent.detail?.tokens) {
+        setTheses(prev => prev.map(t => 
+          t.id === activeThesisId 
+            ? { ...t, totalTokensUsed: (t.totalTokensUsed || 0) + customEvent.detail.tokens } 
+            : t
+        ));
+      }
+    };
+    window.addEventListener('ai-token-usage', handleTokenUsage);
+    return () => window.removeEventListener('ai-token-usage', handleTokenUsage);
+  }, [activeThesisId]);
+
   const handleStartProject = async (data: { topic: string; type: string; field: string; writingStyle?: string }) => {
     setIsInitializing(true);
     try {

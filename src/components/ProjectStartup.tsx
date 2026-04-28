@@ -179,7 +179,7 @@ export default function ProjectStartup({ onStart, isLoading, theses = [], savedS
           全生命周期管理辅助系统
         </motion.div>
         <h2 className="text-5xl font-black text-white tracking-tighter mb-4">
-          开启您的 MEM 论文之旅
+          开启您的管理类论文之旅
         </h2>
         <p className="text-slate-500 max-w-xl mx-auto font-medium">
           好的开始是成功的一半。我们将引导您从选题评估到自动架构生成，确保论文从第一步就符合评审标准。

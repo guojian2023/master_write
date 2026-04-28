@@ -39,7 +39,7 @@ export default function Sidebar({ activeTab, setActiveTab, hasProject, onOpenSet
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
             <BookOpen className="text-white w-6 h-6" />
           </div>
-          <h1 className="font-black text-xl tracking-tighter text-white">MEM 论文专家</h1>
+          <h1 className="font-black text-xl tracking-tighter text-white">管理类论文专家</h1>
         </div>
       </div>
 

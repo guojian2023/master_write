@@ -23,7 +23,11 @@ export default function Header({ activeTab, thesisTopic, thesis }: HeaderProps) 
 
   // Calculate completion percentage
   let progress = 0;
-  if (thesis && thesis.targetTotalWords) {
+  if (activeTab === 'proposal' && thesis?.proposal?.sections) {
+    const targetWords = thesis.proposal.sections.reduce((acc, s) => acc + (s.targetWordCount || 1000), 0) || 1;
+    const currentWords = thesis.proposal.sections.reduce((acc, s) => acc + (s.content?.length || 0), 0);
+    progress = Math.min(100, Math.round((currentWords / targetWords) * 100));
+  } else if (thesis && thesis.targetTotalWords) {
     const targetWords = thesis.targetTotalWords;
     const currentWords = thesis.chapters.reduce((acc, c) => acc + c.sections.reduce((sAcc, s) => sAcc + (s.content?.length || 0), 0), 0);
     progress = Math.min(100, Math.round((currentWords / targetWords) * 100));
@@ -49,9 +53,18 @@ export default function Header({ activeTab, thesisTopic, thesis }: HeaderProps) 
 
       <div className="flex items-center gap-6">
         {thesis && (
-          <div className="hidden md:flex items-center gap-4 mr-4">
+          <div className="hidden md:flex items-center gap-6 mr-4">
             <div className="text-right">
-              <p className="label-caps mb-1 opacity-50">写作完成率</p>
+              <p className="label-caps mb-1 opacity-50">Token 开销</p>
+              <div className="flex items-center gap-1.5 justify-end">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-[11px] font-mono font-bold text-emerald-400">
+                  {thesis.totalTokensUsed ? thesis.totalTokensUsed.toLocaleString() : '0'}
+                </span>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="label-caps mb-1 opacity-50">{activeTab === 'proposal' ? '开题报告完成率' : '写作完成率'}</p>
               <div className="flex items-center gap-2">
                 <div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden">
                   <div className="h-full bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" style={{ width: `${progress}%` }}></div>
