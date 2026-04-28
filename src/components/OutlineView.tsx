@@ -318,7 +318,7 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-12 gap-6">
         <div>
           <h3 className="text-3xl font-black text-white tracking-tight">论文逻辑架构</h3>
-          <p className="text-sm text-slate-500 mt-2 font-medium">BUPT 标准六章架构，由 AI 专家引擎为您保驾护航。</p>
+          <p className="text-sm text-slate-500 mt-2 font-medium">标准六章架构，由 AI 专家引擎为您保驾护航。</p>
         </div>
         <div className="flex gap-4">
           <div className="px-5 py-3 bento-card flex items-center gap-3">
