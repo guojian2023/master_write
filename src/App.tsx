@@ -383,6 +383,11 @@ export default function App() {
                    styles={savedStyles}
                    onAddStyle={(style) => setSavedStyles(p => [...p, style])}
                    onDeleteStyle={(id) => setSavedStyles(p => p.filter(s => s.id !== id))}
+                   onImportStyles={(styles) => setSavedStyles(p => {
+                     const existingIds = new Set(p.map(s => s.id));
+                     const toAdd = styles.filter(s => !existingIds.has(s.id));
+                     return [...p, ...toAdd];
+                   })}
                  />
                </motion.div>
             )}

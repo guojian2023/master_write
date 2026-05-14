@@ -4,43 +4,52 @@ import { getApiConfig } from '../lib/apiConfig';
 
 async function generateContentWithConfig(prompt: string, configObj?: any, overrideApiConfig?: any): Promise<string> {
   const config = overrideApiConfig || getApiConfig();
-  const apiKey = config.apiKey || process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("API Key 未配置。请在左下角设置中配置您的 API Key。");
-  }
 
   // Fallbacks if user provided their own API key!
   if (config.platform === 'gemini') {
-      const options: any = { apiKey };
-      if (config.baseUrl) {
-          options.httpOptions = { baseUrl: config.baseUrl };
-      }
-      const ai = new GoogleGenAI(options);
-      let useModel = config.model || "gemini-1.5-flash";
-      if (!useModel.includes("gemini") && !useModel.includes("learnlm")) {
-          useModel = "gemini-1.5-flash";
-      }
-      const response = await ai.models.generateContent({
-        model: useModel,
-        contents: prompt,
-        config: configObj
-      });
+    let useModel = config.model || "gemini-2.5-flash";
+    if (!useModel.includes("gemini") && !useModel.includes("learnlm")) {
+        useModel = "gemini-2.5-flash";
+    }
     
-    if (response.usageMetadata?.totalTokenCount) {
+    // We proxy it through our backend server
+    const apiPayload: any = {
+      prompt,
+      model: useModel,
+      systemInstruction: configObj?.systemInstruction,
+    };
+    if (config.apiKey) apiPayload.customApiKey = config.apiKey;
+    if (config.baseUrl) apiPayload.baseUrl = config.baseUrl;
+
+    const response = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(apiPayload)
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      const fullMsg = [err.error, err.details].filter(Boolean).join(" - ");
+      throw new Error(fullMsg || `API Error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (data.usage?.totalTokenCount) {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('ai-token-usage', { 
-          detail: { tokens: response.usageMetadata.totalTokenCount } 
+          detail: { tokens: data.usage.totalTokenCount } 
         }));
       }
     }
 
-    if (!response.text) {
+    if (!data.text) {
       throw new Error("AI returned empty context");
     }
-    return response.text;
+    return data.text;
   } else {
     // OpenAI, SiliconFlow or Custom REST API
+    const apiKey = config.apiKey || "";
     let baseUrl = config.baseUrl;
     if (!baseUrl) {
       if (config.platform === 'siliconflow') {
@@ -149,10 +158,21 @@ export async function askAI(prompt: string, systemInstruction: string, overrideA
 export async function testAPI() {
   try {
     const config = getApiConfig();
-    const apiKey = config.apiKey || process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-        throw new Error("API Key 未配置。");
+    
+    if (config.platform === 'gemini') {
+      const qs = new URLSearchParams();
+      if (config.apiKey) qs.set('apiKey', config.apiKey);
+      if (config.model) qs.set('model', config.model);
+      if (config.baseUrl) qs.set('baseUrl', config.baseUrl);
+      
+      const response = await fetch(`/api/test-api?${qs.toString()}`);
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `API Error: ${response.status}`);
+      }
+      return `API 测试成功！配置已可调用 (${config.model || 'gemini-1.5-flash'})。`;
     }
+
     await generateContentWithConfig("Hello, please return exactly the word: 'OK'");
     return `API 测试成功！配置已可调用 (${config.model || 'gemini-1.5-flash'})。`;
   } catch (error: any) {

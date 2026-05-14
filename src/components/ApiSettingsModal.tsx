@@ -15,7 +15,7 @@ export default function ApiSettingsModal({ isOpen, onClose }: ApiSettingsModalPr
     platform: 'gemini',
     apiKey: '',
     baseUrl: '',
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.5-flash',
   });
   
   const [isTesting, setIsTesting] = useState(false);
@@ -91,7 +91,7 @@ export default function ApiSettingsModal({ isOpen, onClose }: ApiSettingsModalPr
                     let defaultModel = config.model;
                     let defaultBaseUrl = config.baseUrl;
                     if (newPlatform === 'gemini') {
-                      defaultModel = 'gemini-1.5-flash';
+                      defaultModel = 'gemini-2.5-flash';
                       defaultBaseUrl = '';
                     }
                     else if (newPlatform === 'openai') defaultModel = 'gpt-4o-mini';

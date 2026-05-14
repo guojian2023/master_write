@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, Plus, Loader2, FileText, Trash2, CheckCircle2, AlertCircle, Upload } from 'lucide-react';
+import { Sparkles, Plus, Loader2, FileText, Trash2, CheckCircle2, AlertCircle, Upload, Download } from 'lucide-react';
 import { WritingStyle } from '../types';
 import { askAI, SYSTEM_PROMPTS } from '../services/aiService';
 import * as mammoth from 'mammoth';
@@ -13,9 +13,10 @@ interface StyleManagerProps {
   styles: WritingStyle[];
   onAddStyle: (style: WritingStyle) => void;
   onDeleteStyle: (id: string) => void;
+  onImportStyles?: (styles: WritingStyle[]) => void;
 }
 
-export default function StyleManager({ styles, onAddStyle, onDeleteStyle }: StyleManagerProps) {
+export default function StyleManager({ styles, onAddStyle, onDeleteStyle, onImportStyles }: StyleManagerProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [sampleText, setSampleText] = useState('');
   const [styleName, setStyleName] = useState('');
@@ -24,8 +25,43 @@ export default function StyleManager({ styles, onAddStyle, onDeleteStyle }: Styl
   const [error, setError] = useState('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState('');
+
+  const handleExportStyles = () => {
+    if (!styles || styles.length === 0) return;
+    const blob = new Blob([JSON.stringify(styles, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `writing-styles-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportStyles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (Array.isArray(parsed) && onImportStyles) {
+          onImportStyles(parsed);
+          alert(`成功导入 ${parsed.length} 个写作风格！`);
+        } else {
+          alert('无效的风格导入文件格式！');
+        }
+      } catch (err: any) {
+        alert('解析风格导入文件失败: ' + String(err.message || err));
+      }
+    };
+    reader.readAsText(file);
+    if (importInputRef.current) {
+      importInputRef.current.value = '';
+    }
+  };
 
   const parseDocument = async (file: File) => {
     setIsParsing(true);
@@ -152,13 +188,39 @@ export default function StyleManager({ styles, onAddStyle, onDeleteStyle }: Styl
         </h2>
         
         {!isCreating && (
-          <button
-            onClick={() => setIsCreating(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            新建风格
-          </button>
+          <div className="flex items-center gap-3">
+            <input 
+              type="file" 
+              ref={importInputRef} 
+              className="hidden" 
+              accept=".json" 
+              onChange={handleImportStyles}
+            />
+            <button
+              onClick={() => importInputRef.current?.click()}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-bold rounded-xl transition-all shadow-lg active:scale-95"
+              title="导入风格配置"
+            >
+              <Upload className="w-4 h-4" />
+              导入
+            </button>
+            <button
+              onClick={handleExportStyles}
+              disabled={styles.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-bold rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50"
+              title="导出风格配置"
+            >
+              <Download className="w-4 h-4" />
+              导出
+            </button>
+            <button
+              onClick={() => setIsCreating(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              新建风格
+            </button>
+          </div>
         )}
       </div>
 

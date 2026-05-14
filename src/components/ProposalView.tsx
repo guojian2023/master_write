@@ -47,7 +47,10 @@ export default function ProposalView({ thesis, onUpdate }: ProposalViewProps) {
     try {
       const contentSummary = sections.map(s => `【模块标题：${s.title}，模块ID：${s.id}】\n内容摘要：${s.content?.substring(0, 800) || '暂无内容'}`).join('\n\n');
 
-      const prompt = `项目题目：${thesis.topic}\n开题报告内容汇总：\n${contentSummary}\n\n请作为评审专家，对该开题报告进行深度逻辑审计。特别检查：\n1. 选题依据与研究目标是否匹配，研究方案是否支撑研究内容。\n2. 逻辑断层：国内外研究现状是否引出了本文的研究问题。\n3. 可行性与计划：方法是否具体，预期成果是否合理。\n\n请返回符合系统预设结构（包含 type, severity, message, suggestion, sectionId, sectionTitle）的JSON数组。务必包含每条意见对应的 sectionId 和 sectionTitle。`;
+      const styleInstruction = thesis.writingStyle ? `\n【强制独有写作风格】：\n${thesis.writingStyle}` : '';
+      const globalConstraint = thesis.globalPrompt ? `\n【全局思路约束】：\n${thesis.globalPrompt}\n系统要求：强烈注意避免跑题，必须严格遵守此思路进行发散。` : '';
+
+      const prompt = `项目题目：${thesis.topic}\n开题报告内容汇总：\n${contentSummary}\n\n请作为评审专家，对该开题报告进行深度逻辑审计。特别检查：\n1. 选题依据与研究目标是否匹配，研究方案是否支撑研究内容。\n2. 逻辑断层：国内外研究现状是否引出了本文的研究问题。\n3. 可行性与计划：方法是否具体，预期成果是否合理。\n\n请返回符合系统预设结构（包含 type, severity, message, suggestion, sectionId, sectionTitle）的JSON数组。务必包含每条意见对应的 sectionId 和 sectionTitle。${styleInstruction}${globalConstraint}`;
       
       const response = await askAI(prompt, SYSTEM_PROMPTS.PROPOSAL_AUDITOR);
       const jsonStr = response.replace(/```json|```/g, '').trim();
@@ -84,7 +87,10 @@ export default function ProposalView({ thesis, onUpdate }: ProposalViewProps) {
 
     setFixingIssues(prev => ({ ...prev, [index]: true }));
     try {
-      const prompt = `【详细修改建议与批评】：${issue.suggestion}\n\n【需修改到的开题模块标题】：${issue.sectionTitle || targetSection.title}\n【原开题报告内容】：\n${targetSection.content}`;
+      const styleInstruction = thesis.writingStyle ? `\n【强制独有写作风格】：\n${thesis.writingStyle}` : '';
+      const globalConstraint = thesis.globalPrompt ? `\n【全局思路约束】：\n${thesis.globalPrompt}\n系统要求：强烈注意避免跑题，必须严格遵守此思路进行发散。` : '';
+
+      const prompt = `项目题目：${thesis.topic}\n【详细修改建议与批评】：${issue.suggestion}\n\n【需修改到的开题模块标题】：${issue.sectionTitle || targetSection.title}\n【原开题报告内容】：\n${targetSection.content}${styleInstruction}${globalConstraint}`;
       const revisedContent = await askAI(prompt, SYSTEM_PROMPTS.CONTENT_REVISER);
 
       if (!revisedContent) throw new Error("AI未返回修改的内容");
@@ -123,7 +129,10 @@ export default function ProposalView({ thesis, onUpdate }: ProposalViewProps) {
       const secIndex = sections.findIndex(s => s.id === sectionId);
       const section = sections[secIndex];
 
-      const prompt = `现有开题报告模块：${section.title}\n内容：\n${section.content}\n\n针对以上内容的修改意见：\n${comment}\n\n请严格基于上述意见对该模块进行重新组织和学术重写，保持专业严谨的管理学风格。直接输出修改后的文本，不要多余的话。`;
+      const styleInstruction = thesis.writingStyle ? `\n【强制独有写作风格】：\n${thesis.writingStyle}` : '';
+      const globalConstraint = thesis.globalPrompt ? `\n【全局思路约束】：\n${thesis.globalPrompt}\n系统要求：强烈注意避免跑题，必须严格遵守此思路进行发散。` : '';
+
+      const prompt = `项目题目：${thesis.topic}\n现有开题报告模块：${section.title}\n内容：\n${section.content}\n\n针对以上内容的修改意见：\n${comment}\n\n请严格基于上述意见对该模块进行重新组织和学术重写，保持专业严谨的管理学风格。直接输出修改后的文本，不要多余的话。${styleInstruction}${globalConstraint}`;
       
       const rewritten = await askAI(prompt, SYSTEM_PROMPTS.CONTENT_REVISER);
       
@@ -202,7 +211,10 @@ export default function ProposalView({ thesis, onUpdate }: ProposalViewProps) {
         .map(s => `【${s.title}】:\n${s.content}`)
         .join('\n\n');
 
-      const prompt = `项目题目：${thesis.topic}\n研究类别：${thesis.researchType}\n所在领域：${thesis.field}\n
+      const styleInstruction = thesis.writingStyle ? `\n6. 【强制独有写作风格】：\n${thesis.writingStyle}` : '';
+      const globalConstraint = thesis.globalPrompt ? `\n[全局思路约束]\n${thesis.globalPrompt}\n系统要求：强烈注意避免跑题，必须严格遵守此思路进行发散。` : '';
+
+      const prompt = `项目题目：${thesis.topic}\n研究类别：${thesis.researchType}\n所在领域：${thesis.field}\n${globalConstraint}
 论文大纲结构如下：
 ${outlineStr}
 
@@ -215,7 +227,7 @@ ${completedContext || '无'}
 2. 目标字数须严格控制在约 ${section.targetWordCount || 1000} 字左右（允许±10%误差）。这是硬性约束，请务必保证字数达标！
 3. 直接输出正文内容，不要输出标题，不要任何寒暄和多余格式。
 4. 紧扣此部分的主题，【切勿】擅自撰写其他章节的内容（如无需在"选题依据"中写出"国内外现状"和"预期成果"）。
-5. 确保与上述已完成上下文连贯，不要重复前文已写过的内容。`;
+5. 确保与上述已完成上下文连贯，不要重复前文已写过的内容。${styleInstruction}`;
 
       const customConfig = thesis.generationNodes?.['proposal']?.customConfig;
       const apiConfigOverride = customConfig?.enabled ? {

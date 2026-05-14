@@ -86,7 +86,15 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
 
 直接返回生成的学术正文，不要包含任何引导性话语或多余解释。`;
                
-             const newContent = await askAI(prompt, SYSTEM_PROMPTS.CONTENT_EXPANDER);
+             const customConfig = thesis.generationNodes?.['outline']?.customConfig;
+             const apiConfigOverride = customConfig?.enabled ? {
+               platform: customConfig.platform,
+               model: customConfig.model || undefined,
+               baseUrl: customConfig.baseUrl,
+               apiKey: customConfig.apiKey
+             } : undefined;
+
+             const newContent = await askAI(prompt, SYSTEM_PROMPTS.CONTENT_EXPANDER, apiConfigOverride);
              
              const updatedChapters = [...newThesis.chapters];
              updatedChapters[cIdx].sections[sIdx] = {
@@ -193,9 +201,17 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
 大章节介绍：${thesis.chapters[cIdx].description || '无'}
 请生成该大章节下的子小节（JSON数组格式）。`;
 
-      const jsonStr = await askAI(prompt, SYSTEM_PROMPTS.CHAPTER_STRUCTURE_GENERATOR);
+      const customConfig = thesis.generationNodes?.['outline']?.customConfig;
+      const apiConfigOverride = customConfig?.enabled ? {
+        platform: customConfig.platform,
+        model: customConfig.model || undefined,
+        baseUrl: customConfig.baseUrl,
+        apiKey: customConfig.apiKey
+      } : undefined;
+
+      const jsonStr = await askAI(prompt, SYSTEM_PROMPTS.CHAPTER_STRUCTURE_GENERATOR, apiConfigOverride);
       const jsonMatch = jsonStr.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) throw new Error("Format error from AI");
+      if (!jsonMatch) throw new Error("Format error from AI: " + jsonStr);
       
       const parsed = JSON.parse(jsonMatch[0]);
       if (!Array.isArray(parsed)) throw new Error("Not an array");
@@ -257,7 +273,15 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
 
       const prompt = `论文题目：${thesis.topic}\n现有的整体大纲参考：${outlineContext}\n\n请优化以下${type === 'chapter' ? '大章' : '小节'}的标题：\n【${titleToOptimize}】`;
       
-      const newTitle = await askAI(prompt, SYSTEM_PROMPTS.TITLE_OPTIMIZER);
+      const customConfig = thesis.generationNodes?.['outline']?.customConfig;
+      const apiConfigOverride = customConfig?.enabled ? {
+        platform: customConfig.platform,
+        model: customConfig.model || undefined,
+        baseUrl: customConfig.baseUrl,
+        apiKey: customConfig.apiKey
+      } : undefined;
+
+      const newTitle = await askAI(prompt, SYSTEM_PROMPTS.TITLE_OPTIMIZER, apiConfigOverride);
       
       if (!newTitle) throw new Error("AI未能返回标题");
 
@@ -441,7 +465,7 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
                   <div className="flex flex-col">
                     <div className="flex items-center gap-3">
                       <h4 className="text-lg font-black text-white uppercase tracking-tight">{chapter.title}</h4>
-                      <div className="opacity-0 group-hover/chapter:opacity-100 transition-opacity flex items-center gap-1">
+                      <div className={cn("transition-opacity flex items-center gap-1", optimizingId === chapter.id || editingChapterId === chapter.id ? "opacity-100" : "opacity-0 group-hover/chapter:opacity-100")}>
                         <button 
                           onClick={() => { setEditingChapterId(chapter.id); setEditChapterTitle(chapter.title); }}
                           className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
@@ -458,12 +482,16 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
                           <Sparkles className={cn("w-4 h-4", optimizingId === chapter.id && "animate-pulse")} />
                         </button>
                         <button
-                          onClick={() => handleRegenerateChapterSections(cIdx)}
+                          onClick={(e) => { e.stopPropagation(); handleRegenerateChapterSections(cIdx); }}
                           disabled={optimizingId === chapter.id}
-                          className="p-1.5 text-emerald-500/70 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-colors relative"
+                          className="p-1.5 text-emerald-500/70 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-colors relative flex items-center gap-1"
                           title="重新生成该章节下小节"
                         >
-                          <RefreshCw className={cn("w-4 h-4", optimizingId === chapter.id && "animate-spin")} />
+                          {optimizingId === chapter.id ? (
+                            <><RefreshCw className="w-4 h-4 animate-spin" /><span className="text-xs">生成中...</span></>
+                          ) : (
+                            <RefreshCw className="w-4 h-4" />
+                          )}
                         </button>
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleDeleteChapter(cIdx); }}

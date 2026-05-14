@@ -190,6 +190,28 @@ export default function ProjectStartup({ onStart, isLoading, theses = [], savedS
                     </div>
                   </div>
                 </div>
+
+                <div className="mb-4" onClick={(e) => e.stopPropagation()}>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1">关联的写作风格：</label>
+                  <select
+                    value={savedStyles.find(s => s.content === thesis.writingStyle)?.id || ''}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      const selectedStyle = savedStyles.find(s => s.id === e.target.value);
+                      if (onUpdateThesis) {
+                        onUpdateThesis({ ...thesis, writingStyle: selectedStyle?.content });
+                      }
+                    }}
+                    className="w-full bg-[#0F172A] border border-slate-700/50 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-blue-500 transition-colors appearance-none cursor-pointer"
+                  >
+                    <option value="">-- 未关联写作风格 --</option>
+                    {savedStyles.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="flex items-center justify-between mt-auto">
                   <div className="flex items-center gap-2">
                     <button 

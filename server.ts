@@ -7,7 +7,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: "50mb" }));
 
   // API Endpoints
   app.get("/api/health", (req, res) => {
@@ -165,16 +165,25 @@ async function startServer() {
   });
 
   app.get("/api/test-api", async (req, res) => {
+    let debugInfo = "unknown";
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
+      let apiKey = req.query.apiKey as string | undefined;
+      if (apiKey === "undefined" || apiKey === "") apiKey = undefined;
+      apiKey = apiKey || process.env.GEMINI_API_KEY;
       const model = (req.query.model as string) || "gemini-2.5-flash";
+      const baseUrl = (req.query.baseUrl as string) || undefined;
+      
+      debugInfo = "Using key starting with " + (apiKey ? apiKey.substring(0, 4) + " len " + apiKey.length : "empty");
       
       if (!apiKey) {
         return res.status(400).json({ error: "服务器未配置 API Key (GEMINI_API_KEY)。请在 AI Studio 设置中配置。" });
       }
 
       const { GoogleGenAI } = await import("@google/genai");
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ 
+        apiKey,
+        httpOptions: baseUrl ? { baseUrl } : undefined
+      });
       
       const response = await ai.models.generateContent({
         model: model,
@@ -192,6 +201,7 @@ async function startServer() {
       const fullErrorStr = errDetails + " " + JSON.stringify(error, Object.getOwnPropertyNames(error));
       res.status(500).json({ 
         error: "API 测试失败", 
+        debugInfo,
         details: fullErrorStr
       });
     }
@@ -199,8 +209,9 @@ async function startServer() {
 
   app.post("/api/generate", async (req, res) => {
     try {
-      const { prompt, systemInstruction, model } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY;
+      let { prompt, systemInstruction, model, customApiKey, baseUrl } = req.body;
+      if (customApiKey === "undefined" || customApiKey === "") customApiKey = undefined;
+      const apiKey = customApiKey || process.env.GEMINI_API_KEY;
       
       if (!apiKey) {
         console.error("Critical: GEMINI_API_KEY is not defined in environment");
@@ -208,7 +219,10 @@ async function startServer() {
       }
 
       const { GoogleGenAI } = await import("@google/genai");
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ 
+        apiKey,
+        httpOptions: baseUrl ? { baseUrl } : undefined
+      });
       
       const response = await ai.models.generateContent({
         model: model || "gemini-2.5-flash",
@@ -225,7 +239,7 @@ async function startServer() {
         throw new Error("AI returned empty context");
       }
 
-      res.json({ text });
+      res.json({ text, usage: response.usageMetadata });
     } catch (error: any) {
       console.error("AI Generation detailed error:", error);
       const errDetails = error instanceof Error ? error.message : String(error);
