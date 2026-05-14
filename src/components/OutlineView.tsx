@@ -54,6 +54,8 @@ export default function OutlineView({ thesis, onUpdate, onSelectSection }: Outli
              const nextSection = currentIndex < allSections.length - 1 ? allSections[currentIndex + 1] : null;
 
              const styleInstruction = thesis.writingStyle ? `\n5. 【强制独有写作风格】：\n${thesis.writingStyle}` : '';
+             const globalConstraint = thesis.globalPrompt ? `\n[全局思路约束]\n${thesis.globalPrompt}\n系统要求：强烈注意避免跑题，必须严格遵守此思路进行学术化扩展。` : '';
+             
              const prompt = `
 论文题目：${newThesis.topic}
 研究类型：管理类
@@ -61,6 +63,8 @@ export default function OutlineView({ thesis, onUpdate, onSelectSection }: Outli
 
 [全局大纲结构]
 ${structure}
+
+${globalConstraint}
 
 [上下文关联]
 ${prevSection ? `前一小节（${prevSection.title}）摘要或内容：\n${prevSection.content ? prevSection.content.substring(0, 800) : '(尚无内容)'}...` : '（本小节为首节）'}
@@ -183,6 +187,7 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
     
     try {
       const prompt = `论文题目：${thesis.topic}\n研究类型：${thesis.researchType}\n所在领域：${thesis.field}\n
+全局辅助研究思路：${thesis.globalPrompt || '无'}
 开题报告关键约束：${thesis.proposal?.constraintPrompt || '无'}
 大章节标题：${thesis.chapters[cIdx].title}
 大章节介绍：${thesis.chapters[cIdx].description || '无'}
@@ -389,6 +394,23 @@ ${nextSection ? `后一小节（${nextSection.title}）预告：系统将确保�
             className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-blue-600/10 transition-all active:scale-95"
           >
             导出全文
+          </button>
+          <button 
+            onClick={() => {
+              const cleaned = { ...thesis, id: undefined, updatedAt: undefined };
+              const blob = new Blob([JSON.stringify(cleaned, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `${thesis.topic || 'thesis'}-data.json`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            }}
+            className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-black uppercase tracking-widest rounded-xl transition-all active:scale-95"
+          >
+            导出 JSON 数据
           </button>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { FileText, Loader2, Sparkles, CheckCircle2, AlertCircle, PlayCircle, FastForward, Edit3, X, Check } from 'lucide-react';
-import { Thesis, ProposalSection } from '../types';
+import { FileText, Loader2, Sparkles, CheckCircle2, AlertCircle, PlayCircle, FastForward, Edit3, X, Check, ShieldCheck, AlertTriangle, MessageSquareDiff, RefreshCw } from 'lucide-react';
+import { Thesis, ProposalSection, LogicIssue } from '../types';
 import { askAI, SYSTEM_PROMPTS } from '../services/aiService';
 
 import { getApiConfig } from '../lib/apiConfig';
@@ -31,6 +31,121 @@ export default function ProposalView({ thesis, onUpdate }: ProposalViewProps) {
 
   const [editingWordSectionId, setEditingWordSectionId] = useState<string | null>(null);
   const [editWordCount, setEditWordCount] = useState<number>(0);
+
+  // Issue audit
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [fixingIssues, setFixingIssues] = useState<Record<number, boolean>>({});
+  const issues = proposal?.auditIssues || [];
+
+  // Manual revise
+  const [revisionComments, setRevisionComments] = useState<Record<string, string>>({});
+  const [isRewriting, setIsRewriting] = useState<Record<string, boolean>>({});
+
+  const performAudit = async () => {
+    setIsAuditing(true);
+    setErrorMsg(null);
+    try {
+      const contentSummary = sections.map(s => `【模块标题：${s.title}，模块ID：${s.id}】\n内容摘要：${s.content?.substring(0, 800) || '暂无内容'}`).join('\n\n');
+
+      const prompt = `项目题目：${thesis.topic}\n开题报告内容汇总：\n${contentSummary}\n\n请作为评审专家，对该开题报告进行深度逻辑审计。特别检查：\n1. 选题依据与研究目标是否匹配，研究方案是否支撑研究内容。\n2. 逻辑断层：国内外研究现状是否引出了本文的研究问题。\n3. 可行性与计划：方法是否具体，预期成果是否合理。\n\n请返回符合系统预设结构（包含 type, severity, message, suggestion, sectionId, sectionTitle）的JSON数组。务必包含每条意见对应的 sectionId 和 sectionTitle。`;
+      
+      const response = await askAI(prompt, SYSTEM_PROMPTS.PROPOSAL_AUDITOR);
+      const jsonStr = response.replace(/```json|```/g, '').trim();
+      const parsedIssues = JSON.parse(jsonStr);
+      
+      onUpdate({
+        ...thesis,
+        proposal: {
+          ...proposal!,
+          auditIssues: parsedIssues,
+          lastAuditDate: new Date().toLocaleString()
+        }
+      });
+    } catch (e: any) {
+      setErrorMsg(`审计失败: ${e.message || String(e)}`);
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
+  const handleFixIssue = async (index: number) => {
+    const issue = issues[index];
+    if (!issue.sectionId) {
+      setErrorMsg(`第 ${index + 1} 条建议缺少 sectionId，无法自动修复`);
+      return;
+    }
+
+    const targetIndex = sections.findIndex(s => s.id === issue.sectionId);
+    if (targetIndex === -1) {
+      setErrorMsg(`未找到匹配的章节 ID: ${issue.sectionId}`);
+      return;
+    }
+    const targetSection = sections[targetIndex];
+
+    setFixingIssues(prev => ({ ...prev, [index]: true }));
+    try {
+      const prompt = `【详细修改建议与批评】：${issue.suggestion}\n\n【需修改到的开题模块标题】：${issue.sectionTitle || targetSection.title}\n【原开题报告内容】：\n${targetSection.content}`;
+      const revisedContent = await askAI(prompt, SYSTEM_PROMPTS.CONTENT_REVISER);
+
+      if (!revisedContent) throw new Error("AI未返回修改的内容");
+
+      const freshSections = [...sections];
+      freshSections[targetIndex] = { ...targetSection, content: revisedContent.trim() };
+      
+      const newIssues = issues.filter((_, i) => i !== index);
+
+      onUpdate({ 
+        ...thesis, 
+        proposal: { ...thesis.proposal!, sections: freshSections, auditIssues: newIssues } 
+      });
+    } catch (e: any) {
+      setErrorMsg(`修复报错: ${e.message || String(e)}`);
+    } finally {
+      setFixingIssues(prev => ({ ...prev, [index]: false }));
+    }
+  };
+
+  const handleIgnoreIssue = (idx: number) => {
+    const newIssues = issues.filter((_, i) => i !== idx);
+    onUpdate({ 
+      ...thesis, 
+      proposal: { ...thesis.proposal!, auditIssues: newIssues } 
+    });
+  };
+
+  const handleManualRevise = async (sectionId: string) => {
+    const comment = revisionComments[sectionId];
+    if (!comment || !comment.trim() || isRewriting[sectionId]) return;
+
+    setIsRewriting(prev => ({ ...prev, [sectionId]: true }));
+    setErrorMsg(null);
+    try {
+      const secIndex = sections.findIndex(s => s.id === sectionId);
+      const section = sections[secIndex];
+
+      const prompt = `现有开题报告模块：${section.title}\n内容：\n${section.content}\n\n针对以上内容的修改意见：\n${comment}\n\n请严格基于上述意见对该模块进行重新组织和学术重写，保持专业严谨的管理学风格。直接输出修改后的文本，不要多余的话。`;
+      
+      const rewritten = await askAI(prompt, SYSTEM_PROMPTS.CONTENT_REVISER);
+      
+      const freshSections = [...sections];
+      freshSections[secIndex] = {
+        ...section,
+        content: rewritten.trim(),
+        status: 'success'
+      };
+      
+      onUpdate({
+        ...thesis,
+        proposal: { ...thesis.proposal!, sections: freshSections }
+      });
+      
+      setRevisionComments(prev => ({ ...prev, [sectionId]: '' }));
+    } catch (e: any) {
+      setErrorMsg(`改写报错: ${e.message || String(e)}`);
+    } finally {
+      setIsRewriting(prev => ({ ...prev, [sectionId]: false }));
+    }
+  };
 
   const handleGenerateOutline = async () => {
     setIsGeneratingOutline(true);
@@ -263,6 +378,14 @@ ${fullContent}
           ) : (
             <>
               <button
+                onClick={performAudit}
+                disabled={isAuditing || (!hasLegacyContent && sections.every(s => !s.content))}
+                className="flex items-center gap-2 px-6 py-2.5 bg-amber-600/20 text-amber-500 hover:bg-amber-500 hover:text-white border border-amber-500/30 text-sm font-bold rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAuditing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                逻辑审计
+              </button>
+              <button
                 onClick={handleGenerateConstraint}
                 disabled={isGeneratingConstraint || (!hasLegacyContent && sections.every(s => !s.content))}
                 className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -302,6 +425,58 @@ ${fullContent}
           <p className="text-xs text-indigo-200/70 leading-relaxed font-mono">
             {proposal.constraintPrompt}
           </p>
+        </motion.div>
+      )}
+
+      {issues.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl mb-6">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
+            <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-rose-400" />
+              发现 {issues.length} 个逻辑改进建议
+            </h3>
+            {proposal?.lastAuditDate && (
+              <span className="text-[10px] text-slate-500">最新审计: {proposal.lastAuditDate}</span>
+            )}
+          </div>
+          <div className="space-y-4">
+            {issues.map((issue, idx) => (
+              <div key={idx} className="bg-slate-800/30 border border-slate-700 rounded-xl p-4 flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  {issue.severity === 'high' ? <AlertTriangle className="w-4 h-4 text-rose-500" /> : <AlertTriangle className="w-4 h-4 text-amber-500" />}
+                  <span className="text-xs font-bold text-slate-300">
+                    {issue.type === 'gap' ? '逻辑断层' : issue.type === 'inconsistency' ? '前后矛盾' : issue.type === 'vagueness' ? '表述含糊' : '方法论缺陷'}
+                  </span>
+                  <span className="text-[10px] text-slate-500 ml-auto flex items-center gap-1">
+                    <FileText className="w-3 h-3" />
+                    定位: {issue.sectionTitle || '全局'}
+                  </span>
+                </div>
+                <div className="text-sm text-slate-300 leading-relaxed">
+                  <span className="font-bold text-slate-400">问题：</span>{issue.message}
+                </div>
+                <div className="text-sm text-amber-400/90 leading-relaxed bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
+                  <span className="font-bold">对策：</span>{issue.suggestion}
+                </div>
+                <div className="flex items-center gap-3 pt-2">
+                  <button 
+                    onClick={() => handleFixIssue(idx)}
+                    disabled={fixingIssues[idx]}
+                    className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold uppercase tracking-widest text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
+                  >
+                    {fixingIssues[idx] ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    一键 AI 修复本开题模块
+                  </button>
+                  <button 
+                    onClick={() => handleIgnoreIssue(idx)}
+                    className="px-5 py-2.5 rounded-xl bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-emerald-400 transition-all"
+                  >
+                    标记已处理
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </motion.div>
       )}
 
@@ -389,8 +564,27 @@ ${fullContent}
               
               <div className="p-6">
                 {sec.content ? (
-                  <div className="prose prose-invert prose-blue max-w-none prose-p:text-slate-300 prose-p:leading-relaxed text-sm">
-                    <div className="whitespace-pre-wrap">{sec.content}</div>
+                  <div className="flex flex-col md:flex-row gap-6">
+                    <div className="flex-1 prose prose-invert prose-blue max-w-none prose-p:text-slate-300 prose-p:leading-relaxed text-sm">
+                      <div className="whitespace-pre-wrap">{sec.content}</div>
+                    </div>
+                    <div className="md:w-72 shrink-0 md:border-l border-slate-800 md:pl-6 flex flex-col gap-3">
+                      <h4 className="text-xs font-bold text-slate-400 flex items-center gap-2 mb-1"><MessageSquareDiff className="w-4 h-4 text-amber-500" />定向修改意见</h4>
+                      <textarea
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-slate-300 outline-none resize-none placeholder:text-slate-600 focus:border-amber-500/50 focus:bg-slate-900/80 transition-colors h-32"
+                        placeholder="例如：缺少理论模型的应用、逻辑过渡不平滑..."
+                        value={revisionComments[sec.id] || ''}
+                        onChange={e => setRevisionComments(prev => ({ ...prev, [sec.id]: e.target.value }))}
+                      />
+                      <button
+                        onClick={() => handleManualRevise(sec.id)}
+                        disabled={isRewriting[sec.id] || !revisionComments[sec.id]?.trim()}
+                        className="w-full py-2.5 rounded-xl bg-amber-600/20 text-amber-500 border border-amber-500/30 text-[10px] font-black uppercase tracking-widest hover:bg-amber-500 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {isRewriting[sec.id] ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        根据意见重写本文
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="text-center py-10 text-slate-600 italic text-sm">

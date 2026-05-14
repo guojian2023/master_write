@@ -172,10 +172,26 @@ export default function App() {
     return () => window.removeEventListener('ai-token-usage', handleTokenUsage);
   }, [activeThesisId]);
 
-  const handleStartProject = async (data: { topic: string; type: string; field: string; writingStyle?: string }) => {
+  const handleStartProject = async (data: { topic: string; type: string; field: string; writingStyle?: string; writingIdeas?: string }) => {
     setIsInitializing(true);
     try {
-      const prompt = `题目：${data.topic}\n类型：${data.type}\n领域：${data.field}`;
+      let globalPrompt = "";
+      if (data.writingIdeas && data.writingIdeas.trim()) {
+        const optimizerPrompt = `项目的初步研究思路或辅助内容如下：\n【${data.writingIdeas.trim()}】\n\n请提取并将其优化为一段学术性、强约束力的“全局主题提示词”。`;
+        globalPrompt = await askAI(optimizerPrompt, SYSTEM_PROMPTS.IDEAS_OPTIMIZER);
+      }
+
+      const typeMapping: Record<string, string> = {
+        special: '专题研究',
+        case: '案例研究',
+        design: '设计应用'
+      };
+      const typeText = typeMapping[data.type] || data.type;
+      let prompt = `题目：${data.topic}\n类型：${typeText}\n领域：${data.field}`;
+      if (globalPrompt) {
+        prompt += `\n全局约束思路：${globalPrompt}`;
+      }
+      
       const aiResponse = await askAI(prompt, SYSTEM_PROMPTS.STRUCTURE_GENERATOR);
       
       // Basic cleaning if AI returns Markdown
@@ -213,6 +229,8 @@ export default function App() {
         solutions: [],
         citations: [],
         writingStyle: data.writingStyle || undefined,
+        rawWritingIdeas: data.writingIdeas || undefined,
+        globalPrompt: globalPrompt || undefined,
         updatedAt: new Date().toISOString()
       };
 
@@ -222,6 +240,63 @@ export default function App() {
     } catch (error) {
       console.error("Failed to start project:", error);
       alert("初始化失败，请检查网络或API密钥。");
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
+  const handleRegenerateOutline = async (thesisId: string, newGlobalPrompt: string) => {
+    setIsInitializing(true);
+    try {
+      const existingThesis = theses.find(t => t.id === thesisId);
+      if (!existingThesis) return;
+
+      const typeMapping: Record<string, string> = {
+        special: '专题研究',
+        case: '案例研究',
+        design: '设计应用'
+      };
+      const typeText = typeMapping[existingThesis.researchType] || existingThesis.researchType;
+      let prompt = `题目：${existingThesis.topic}\n类型：${typeText}\n领域：${existingThesis.field}`;
+      if (newGlobalPrompt && newGlobalPrompt.trim()) {
+        prompt += `\n全局约束思路：${newGlobalPrompt.trim()}`;
+      }
+      
+      const aiResponse = await askAI(prompt, SYSTEM_PROMPTS.STRUCTURE_GENERATOR);
+      const jsonStr = aiResponse.replace(/```json|```/g, '').trim();
+      let parsedData = JSON.parse(jsonStr);
+      
+      const chapterArray = Array.isArray(parsedData) ? parsedData : (parsedData.chapters || []);
+      if (!Array.isArray(chapterArray)) {
+        throw new Error("AI response did not contain a valid chapter array");
+      }
+
+      const chapters: Chapter[] = chapterArray.map((c: any) => ({
+        id: crypto.randomUUID(),
+        title: c.title || "未命名章节",
+        description: c.description || "",
+        sections: (c.sections || []).map((s: any) => ({
+          id: crypto.randomUUID(),
+          title: s.title || "未命名小节",
+          content: "",
+          status: 'empty',
+          targetWordCount: s.targetWordCount || 1500
+        }))
+      }));
+
+      const updatedThesis: Thesis = {
+        ...existingThesis,
+        globalPrompt: newGlobalPrompt.trim() || undefined,
+        chapters,
+        updatedAt: new Date().toISOString()
+      };
+
+      updateThesis(updatedThesis);
+      setActiveThesisId(updatedThesis.id);
+      setActiveTab('outline');
+    } catch (error) {
+      console.error('Failed to regenerate structure:', error);
+      alert('大纲重新生成失败，请重试');
     } finally {
       setIsInitializing(false);
     }
@@ -251,8 +326,22 @@ export default function App() {
                   onStart={handleStartProject} 
                   isLoading={isInitializing} 
                   theses={theses}
+                  savedStyles={savedStyles}
                   onLoadExisting={(id) => {
                     setActiveThesisId(id);
+                    setActiveTab('outline');
+                  }}
+                  onImportThesis={(imported) => {
+                    if (!imported.id) imported.id = crypto.randomUUID();
+                    if (!imported.updatedAt) imported.updatedAt = new Date().toISOString();
+                    setTheses(prev => {
+                       const exists = prev.some(t => t.id === imported.id);
+                       if (exists) {
+                           return prev.map(t => t.id === imported.id ? imported : t);
+                       }
+                       return [imported, ...prev];
+                    });
+                    setActiveThesisId(imported.id);
                     setActiveTab('outline');
                   }}
                   onDeleteThesis={(id) => {
@@ -277,7 +366,8 @@ export default function App() {
                       }
                     }
                   }}
-                  savedStyles={savedStyles}
+                  onUpdateThesis={updateThesis}
+                  onRegenerateOutline={handleRegenerateOutline}
                 />
               </motion.div>
             )}

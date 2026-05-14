@@ -46,6 +46,8 @@ export interface Proposal {
   content?: string;
   sections?: ProposalSection[];
   constraintPrompt: string;
+  auditIssues?: LogicIssue[];
+  lastAuditDate?: string;
 }
 
 export type GenerationStepId = 'topic' | 'style' | 'outline' | 'proposal' | 'body';
@@ -77,8 +79,12 @@ export interface Thesis {
   targetTotalWords?: number;
   totalTokensUsed?: number;
   writingStyle?: string;
+  globalPrompt?: string; // AI generated prompt from the user's raw ideas
+  rawWritingIdeas?: string;
   proposal?: Proposal;
   generationNodes?: Partial<Record<GenerationStepId, GenerationNode>>;
+  auditIssues?: LogicIssue[];
+  lastAuditDate?: string;
   updatedAt: string;
 }
 

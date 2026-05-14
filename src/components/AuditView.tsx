@@ -22,10 +22,11 @@ interface AuditViewProps {
 
 export default function AuditView({ thesis, onUpdate }: AuditViewProps) {
   const [isAuditing, setIsAuditing] = useState(false);
-  const [issues, setIssues] = useState<LogicIssue[]>([]);
-  const [lastAuditDate, setLastAuditDate] = useState<string | null>(null);
   const [fixingIssues, setFixingIssues] = useState<Record<number, boolean>>({});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const issues = thesis.auditIssues || [];
+  const lastAuditDate = thesis.lastAuditDate || null;
 
   const performAudit = async () => {
     setIsAuditing(true);
@@ -33,15 +34,22 @@ export default function AuditView({ thesis, onUpdate }: AuditViewProps) {
     try {
       // Collect summary of the thesis for audit
       const contentSummary = thesis.chapters.map(c => {
-        return `章：${c.title}\n${c.sections.map(s => `【节标题：${s.title}，节ID：${s.id}】\n内容摘要：${s.content?.substring(0, 500) || '暂无内容'}`).join('\n\n')}`;
+        return `章：${c.title}\n${c.sections.map(s => `【节标题：${s.title}，节ID：${s.id}】\n内容摘要：${s.content?.substring(0, 800) || '暂无内容'}`).join('\n\n')}`;
       }).join('\n\n');
 
-      const prompt = `论文题目：${thesis.topic}\n论文内容汇总：\n${contentSummary}\n\n请作为评审专家，对该论文按章节进行深度逻辑审计。特别检查：\n1. 提出的对策是否真正解决了分析中提到的问题点？\n2. 理论框架是否只是“摆设”，有没有真正融入分析？\n3. 结论是否由正文自然推导而出？\n\n请返回JSON格式的Issue列表。务必包含每条意见对应的 sectionId、chapterTitle 和 sectionTitle。`;
+      const prompt = `论文题目：${thesis.topic}\n论文内容汇总：\n${contentSummary}\n\n请作为评审专家，对该论文按章节进行深度逻辑审计。特别检查：\n1. 提出的对策是否真正解决了分析中提到的问题点？\n2. 理论框架是否只是“摆设”，有没有真正融入分析？\n3. 结论是否由正文自然推导而出？\n\n请返回符合系统预设结构的JSON数组。务必包含每条意见对应的 sectionId、chapterTitle 和 sectionTitle。`;
       
       const response = await askAI(prompt, SYSTEM_PROMPTS.LOGIC_AUDITOR);
       const jsonStr = response.replace(/```json|```/g, '').trim();
-      setIssues(JSON.parse(jsonStr));
-      setLastAuditDate(new Date().toLocaleString());
+      const parsedIssues = JSON.parse(jsonStr);
+      
+      if (onUpdate) {
+        onUpdate({
+          ...thesis,
+          auditIssues: parsedIssues,
+          lastAuditDate: new Date().toLocaleString()
+        });
+      }
     } catch (e: any) {
       setErrorMsg(`审计失败: ${e.message || String(e)}`);
     } finally {
@@ -70,7 +78,7 @@ export default function AuditView({ thesis, onUpdate }: AuditViewProps) {
 
     setFixingIssues(prev => ({ ...prev, [index]: true }));
     try {
-      const prompt = `【修改意见】：${issue.suggestion}\n\n【需修改到的节标题】：${issue.sectionTitle || targetSection.title}\n【原正文内容】：\n${targetSection.content}`;
+      const prompt = `【详细修改建议与批评】：${issue.suggestion}\n\n【需修改到的节标题】：${issue.sectionTitle || targetSection.title}\n【原正文内容】：\n${targetSection.content}`;
       const revisedContent = await askAI(prompt, SYSTEM_PROMPTS.CONTENT_REVISER);
 
       if (!revisedContent) throw new Error("AI未返回修改的内容");
@@ -80,14 +88,21 @@ export default function AuditView({ thesis, onUpdate }: AuditViewProps) {
         sections: c.sections.map(s => s.id === issue.sectionId ? { ...s, content: revisedContent } : s)
       }));
 
-      onUpdate({ ...thesis, chapters: newChapters });
-      
       // Remove issue from the list
-      setIssues(prev => prev.filter((_, i) => i !== index));
+      const newIssues = issues.filter((_, i) => i !== index);
+
+      onUpdate({ ...thesis, chapters: newChapters, auditIssues: newIssues });
     } catch (e: any) {
       setErrorMsg(`修复报错: ${e.message || String(e)}`);
     } finally {
       setFixingIssues(prev => ({ ...prev, [index]: false }));
+    }
+  };
+
+  const handleIgnore = (idx: number) => {
+    if (onUpdate) {
+      const newIssues = issues.filter((_, i) => i !== idx);
+      onUpdate({ ...thesis, auditIssues: newIssues });
     }
   };
 
@@ -258,7 +273,7 @@ export default function AuditView({ thesis, onUpdate }: AuditViewProps) {
                           </button>
                         )}
                         <button 
-                          onClick={() => setIssues(prev => prev.filter((_, i) => i !== idx))}
+                          onClick={() => handleIgnore(idx)}
                           className="px-5 py-2.5 rounded-xl bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-emerald-400 transition-all"
                         >
                           标记已修复 (忽略)

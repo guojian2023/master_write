@@ -185,9 +185,11 @@ export default function ApiSettingsModal({ isOpen, onClose }: ApiSettingsModalPr
               value={config.apiKey}
               onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-slate-600"
-              placeholder="留空则使用环境变量配置的 Key"
+              placeholder={config.platform === 'gemini' ? "留空则使用 AI Studio 平台内置的默认 Key" : "留空则使用环境变量配置的 Key"}
             />
-            <p className="text-xs text-slate-500">API Key 仅安全地保存在您的浏览器本地 (localStorage)。</p>
+            <p className="text-xs text-slate-500">
+                {config.platform === 'gemini' ? '推荐在 AI Studio 平台调试时留空，将自动注入平台内置环境 Key。' : 'API Key 仅安全地保存在您的浏览器本地 (localStorage)。'}
+            </p>
           </div>
 
           {/* Test Status */}

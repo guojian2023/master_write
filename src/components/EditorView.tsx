@@ -109,7 +109,8 @@ export default function EditorView({ thesis, onUpdate, initialSectionId }: Edito
       ).join('\n');
 
       const styleInstruction = thesis.writingStyle ? `\n5. 【强制独有写作风格】：\n${thesis.writingStyle}` : '';
-      const proposalConstraint = thesis.proposal?.constraintPrompt ? `\n[开题报告核心约束]\n${thesis.proposal.constraintPrompt}\n系统要求：生成全文初稿或扩写时，务必将上述核心理念贯彻始终，确保不偏题。` : '';
+      const proposalConstraint = thesis.proposal?.constraintPrompt ? `\n[开题报告核心约束]\n${thesis.proposal.constraintPrompt}\n系统要求：生成片段或扩写时，务必将上述核心理念贯彻始终，确保不偏题。` : '';
+      const globalConstraint = thesis.globalPrompt ? `\n[全局思路约束]\n${thesis.globalPrompt}\n系统要求：强烈注意避免跑题，必须严格遵守用户在建项时提供的全局约束思想。` : '';
       const prompt = `
 论文题目：${thesis.topic}
 研究类型：管理类
@@ -119,6 +120,7 @@ export default function EditorView({ thesis, onUpdate, initialSectionId }: Edito
 ${structure}
 
 ${proposalConstraint}
+${globalConstraint}
 
 [上下文关联]
 ${prevSection ? `前一小节（${prevSection.title}）摘要或内容：\n${prevSection.content ? prevSection.content.substring(0, 800) : '(尚无内容)'}...` : '（本小节为首节）'}

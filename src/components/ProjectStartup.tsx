@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Sparkles, 
   Target, 
@@ -11,28 +11,35 @@ import {
   Wifi,
   Trash2,
   Check,
-  FileText
+  FileText,
+  Upload,
+  Settings,
+  X
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { Thesis, WritingStyle } from '../types';
 import { askAI, SYSTEM_PROMPTS } from '../services/aiService';
 
 interface ProjectStartupProps {
-  onStart: (data: { topic: string; type: string; field: string; writingStyle?: string }) => void;
+  onStart: (data: { topic: string; type: string; field: string; writingStyle?: string; writingIdeas?: string }) => void;
   isLoading: boolean;
   theses?: Thesis[];
   savedStyles?: WritingStyle[];
   onLoadExisting?: (id: string) => void;
+  onImportThesis?: (thesis: Thesis) => void;
   onDeleteThesis?: (id: string) => void;
+  onUpdateThesis?: (thesis: Thesis) => void;
+  onRegenerateOutline?: (thesisId: string, globalPrompt: string) => void;
 }
 
-export default function ProjectStartup({ onStart, isLoading, theses = [], savedStyles = [], onLoadExisting, onDeleteThesis }: ProjectStartupProps) {
+export default function ProjectStartup({ onStart, isLoading, theses = [], savedStyles = [], onLoadExisting, onImportThesis, onDeleteThesis, onUpdateThesis, onRegenerateOutline }: ProjectStartupProps) {
   const [step, setStep] = useState(1);
   const [topic, setTopic] = useState('');
-  const [type, setType] = useState('case');
+  const [type, setType] = useState('special');
   const [field, setField] = useState('');
   const [selectedStyleId, setSelectedStyleId] = useState<string>('');
+  const [writingIdeas, setWritingIdeas] = useState('');
   
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<{status: 'success' | 'error', message: string} | null>(null);
@@ -42,6 +49,9 @@ export default function ProjectStartup({ onStart, isLoading, theses = [], savedS
   const [generatedTitles, setGeneratedTitles] = useState<string[]>([]);
   const [isGeneratingTitles, setIsGeneratingTitles] = useState(false);
   const [namingError, setNamingError] = useState('');
+
+  const [editingPromptThesisId, setEditingPromptThesisId] = useState<string | null>(null);
+  const [editingPromptValue, setEditingPromptValue] = useState('');
 
   const handleGenerateTitles = async () => {
     if (!namingData.object || !namingData.problem) {
@@ -110,6 +120,30 @@ export default function ProjectStartup({ onStart, isLoading, theses = [], savedS
   };
 
   const isTestPassed = testResults.every(v => v === true);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        try {
+            const raw = ev.target?.result as string;
+            const parsed = JSON.parse(raw);
+            if (!parsed.topic || !parsed.chapters) {
+                alert("文件格式不正确，缺少 topic 或 chapters。");
+                return;
+            }
+            if (onImportThesis) {
+                onImportThesis(parsed);
+            }
+        } catch (err: any) {
+            alert("JSON 语法解析错误：" + err.message);
+        }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   return (
     <div className="max-w-5xl mx-auto py-12 px-4">
@@ -119,7 +153,17 @@ export default function ProjectStartup({ onStart, isLoading, theses = [], savedS
           animate={{ opacity: 1, y: 0 }}
           className="mb-12"
         >
-          <h3 className="label-caps mb-6 opacity-40">已生成的论文记录 ({theses.length})</h3>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="label-caps opacity-40">已生成的论文记录 ({theses.length})</h3>
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm text-slate-300 transition-colors"
+            >
+              <Upload className="w-4 h-4" />
+              导入已有论文数据 (.json)
+            </button>
+            <input type="file" accept=".json" className="hidden" ref={fileInputRef} onChange={handleImportFile} />
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {theses.map((thesis) => (
               <div 
@@ -147,17 +191,32 @@ export default function ProjectStartup({ onStart, isLoading, theses = [], savedS
                   </div>
                 </div>
                 <div className="flex items-center justify-between mt-auto">
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (window.confirm('确定要删除这篇论文吗？删除后无法恢复。')) {
-                        onDeleteThesis && onDeleteThesis(thesis.id);
-                      }
-                    }}
-                    className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm('确定要删除这篇论文吗？删除后无法恢复。')) {
+                          onDeleteThesis && onDeleteThesis(thesis.id);
+                        }
+                      }}
+                      className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                      title="删除论文"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingPromptThesisId(thesis.id);
+                        setEditingPromptValue(thesis.globalPrompt || thesis.rawWritingIdeas || '');
+                      }}
+                      className="p-2 text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
+                      title="查看/编辑系统提示词并重新生成大纲"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+                  </div>
                   <button className="flex items-center gap-2 text-sm text-blue-400 font-bold group-hover:translate-x-1 transition-transform">
                     开启撰写
                     <ArrowRight className="w-4 h-4" />
@@ -169,7 +228,7 @@ export default function ProjectStartup({ onStart, isLoading, theses = [], savedS
         </motion.div>
       )}
 
-      <div className="text-center mb-16">
+      <div className="text-center mb-16 relative">
         <motion.div 
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -178,6 +237,20 @@ export default function ProjectStartup({ onStart, isLoading, theses = [], savedS
           <Sparkles className="w-3 h-3" />
           全生命周期管理辅助系统
         </motion.div>
+        
+        {theses.length === 0 && (
+          <div className="absolute right-0 top-0">
+             <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm text-slate-300 transition-colors"
+              >
+                <Upload className="w-4 h-4" />
+                导入已有数据
+              </button>
+              <input type="file" accept=".json" className="hidden" ref={fileInputRef} onChange={handleImportFile} />
+          </div>
+        )}
+        
         <h2 className="text-5xl font-black text-white tracking-tighter mb-4">
           开启您的管理类论文之旅
         </h2>
@@ -338,6 +411,14 @@ export default function ProjectStartup({ onStart, isLoading, theses = [], savedS
                     placeholder="如：智能制造"
                     className="w-full bg-[#0F172A] px-5 py-4 rounded-xl border border-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-slate-600 text-white font-medium mb-4"
                   />
+
+                  <label className="label-caps block mb-3 opacity-50 ml-1">补充辅助研究思路内容 (可选)</label>
+                  <textarea
+                    value={writingIdeas}
+                    onChange={(e) => setWritingIdeas(e.target.value)}
+                    placeholder="如：本文主要基于XX调研数据，采用XX理论分析公司的存货管理现状，期望发现在流程或信息传递上的缺陷..."
+                    className="w-full bg-[#0F172A] px-5 py-4 rounded-xl border border-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-slate-600 text-white text-sm font-medium h-32 resize-none mb-4"
+                  />
                   
                   <div className="mt-auto">
                     <div className="mb-4">
@@ -362,7 +443,7 @@ export default function ProjectStartup({ onStart, isLoading, theses = [], savedS
                       disabled={!topic || !field || !isTestPassed || isLoading}
                       onClick={() => {
                         const styleContent = selectedStyleId ? savedStyles.find(s => s.id === selectedStyleId)?.content : undefined;
-                        onStart({ topic, type, field, writingStyle: styleContent });
+                        onStart({ topic, type, field, writingStyle: styleContent, writingIdeas });
                       }}
                       className={cn(
                         "w-full flex items-center justify-center gap-3 py-4 rounded-xl font-bold transition-all shadow-xl",
@@ -474,6 +555,68 @@ export default function ProjectStartup({ onStart, isLoading, theses = [], savedS
           </section>
         </div>
       </div>
+      <AnimatePresence>
+        {editingPromptThesisId && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/50">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-amber-500" />
+                  全局主题辅助提示词
+                </h3>
+                <button
+                  onClick={() => setEditingPromptThesisId(null)}
+                  className="p-2 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6">
+                <p className="text-sm text-slate-400 mb-4 leading-relaxed">
+                  此段内容是AI根据您建项时填写的辅助思路优化得出的“全局约束提示词”。它会在接下来的任何生成中生效。
+                  您可以手动调整此处的内容，然后点击“重新生成大纲”来让AI重新构建论文整体框架。
+                </p>
+                <textarea
+                  className="w-full h-48 bg-[#0A0F1E] border border-slate-700 rounded-xl p-4 text-sm text-slate-300 resize-none outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all font-medium leading-loose"
+                  value={editingPromptValue}
+                  onChange={(e) => setEditingPromptValue(e.target.value)}
+                  placeholder="编辑全局辅助提示词..."
+                />
+              </div>
+              <div className="px-6 py-4 bg-slate-900 border-t border-slate-800 flex justify-end gap-3 rounded-b-2xl">
+                <button
+                  onClick={() => setEditingPromptThesisId(null)}
+                  className="px-6 py-2.5 rounded-xl font-bold text-slate-300 hover:bg-slate-800 hover:text-white transition-colors text-sm"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => {
+                    if (onRegenerateOutline && editingPromptThesisId) {
+                      onRegenerateOutline(editingPromptThesisId, editingPromptValue);
+                      setEditingPromptThesisId(null);
+                    }
+                  }}
+                  className="px-6 py-2.5 rounded-xl font-bold bg-amber-600 hover:bg-amber-500 text-white transition-all shadow-lg shadow-amber-500/20 active:scale-95 text-sm flex items-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  保存并重新生成大纲
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

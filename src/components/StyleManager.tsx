@@ -5,15 +5,9 @@ import { WritingStyle } from '../types';
 import { askAI, SYSTEM_PROMPTS } from '../services/aiService';
 import * as mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 
-// Vite handles the worker module correctly if we import it with ?url
-// Sometimes modern pdfjs versions put it in build/pdf.worker.mjs
-const workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.mjs',
-  import.meta.url
-).toString();
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 interface StyleManagerProps {
   styles: WritingStyle[];

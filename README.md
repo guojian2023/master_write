@@ -11,6 +11,42 @@
 - **风格克隆技术**：支持上传范文并自动提取学术写作风格，生成具有特定笔触的正文。
 - **强制 Markdown 落地持久化防失忆机制**：系统自动在项目根目录的 `outputs/` 文件夹下生成并同步最新的 `[论文选题].md` 副本，每一阶段成果都会实时落盘为标准可读文件，彻底杜绝数据在浏览器缓存中的丢失问题。
 
+### Version 1.0.0 Updates
+
+#### Core New Features & Enhancements
+- **Global Prompt / Research Ideas Support**: Introduced a capability to parse scattered user thinking (auxiliary writing ideas) and academicize them into strict global constraints, guiding both outline structures and deep chapter generation.
+- **Outline Regeneration Capability**: Users can now re-visit their project's global constraints from the project list and completely regenerate the initial outline based on refined global boundaries.
+- **"Specialised Research" Standardized & Defaulted**: "专题研究" (Special Research) is now structurally refined and set as the default thesis mode, enforcing strict architectural requirements (e.g., problem diagnostics, root-cause analyses, robust solutions).
+- **Multi-Thesis Management Improvements**: Enhanced multi-project management. Users can now easily delete projects and view configurations transparently tied to remote and local storage.
+
+#### File-Level Implementation Details
+
+- **`src/App.tsx`**:
+  - Augmented `handleStartProject` to extract user concepts using `SYSTEM_PROMPTS.IDEAS_OPTIMIZER` and persist the resulting global prompt.
+  - Implemented `handleRegenerateOutline` core logic to recreate an outline dynamically for an existing thesis without disturbing the master tracking state.
+  - Safely managed component state for thesis deletion (`onDeleteThesis`) and mapped explicit research types (`special`, `case`, `design`) to parsed, human-readable prompts.
+
+- **`src/types.ts`**:
+  - Updated the `Thesis` interface to securely track `globalPrompt` and `rawWritingIdeas` alongside other attributes.
+
+- **`src/services/aiService.ts`**:
+  - Created the robust `IDEAS_OPTIMIZER` system prompt.
+  - Updated `STRUCTURE_GENERATOR` and `CHAPTER_STRUCTURE_GENERATOR` to vigorously enforce the user's `globalPrompt` as an absolute constraint.
+  - Enforced a rigorous 7-chapter foundational structure for the "专题研究" (Special Research) template, preventing academic deviance.
+
+- **`src/components/ProjectStartup.tsx`**:
+  - Set the research type default to `special`.
+  - Added new form UI specifically for gathering auxiliary research idea definitions.
+  - Expanded the project list UI to include a dedicated modal for inspecting, editing, and initiating a re-generation sequence for existing projects based on their semantic global prompts.
+  - Embedded an irreversible project deletion flow to clear unwanted proposals.
+
+- **`src/components/OutlineView.tsx`**:
+  - Modified the AI generation parameters for sub-sections (`CHAPTER_STRUCTURE_GENERATOR`) to incorporate `globalPrompt` constraints during on-the-fly chapter building.
+  - Adjusted the `CONTENT_EXPANDER` payload to seamlessly absorb the `globalPrompt`, guiding generated text and stopping thematic drift.
+
+- **`src/components/EditorView.tsx`**:
+  - Adapted the localized `prompt` configuration directly inside the editor view to observe `globalConstraint`, ensuring that any granular, manual AI prompt operations run within the user's broader academic boundaries.
+
 ---
 
 ## 📝 流程节点、上下文提示词 (Context Prompts) 与上下文字数需求 (Context Size)
